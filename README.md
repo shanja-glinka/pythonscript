@@ -1,76 +1,85 @@
 # PythonScript
 
-**PythonScript** — это упрощённый интерпретатор-транспилер, позволяющий:
+**PythonScript** is a simplified interpreter-transpiler that allows you to:
 
-- **транслировать** код на Python (подмножество) в JavaScript,
-- **обратно** транспилировать JS (подмножество) в Python,
-- **запускать** полученный код в различных режимах (Node, Browser).
+- **Translate** Python code (a subset) into JavaScript,
+- **Reverse transpile** JS (a subset) back into Python,
+- **Run** the resulting code in various modes (Node, Browser).
 
-Он **не** является полноценной реализацией всего стандарта Python или JS, но даёт представление об архитектуре лексера, парсера и генератора кода.
+It is **not** a complete implementation of the entire Python or JS standard, but it provides insights into the architecture of a lexer, parser, and code generator.
 
-## Структура проекта
+## Project Structure
 
 ```bash
 pythonscript/
 ├── bin/
-│   └── pythonscript       # CLI-скрипт (исполняемый файл для запуска из терминала)
+│   └── pythonscript       # CLI script (executable for terminal use)
+├── dist/
+│   └── ...                # Builds
 ├── src/
 │   ├── core/
-│   │   ├── lexer.js       # Лексический анализатор Python/JS
-│   │   ├── parser.js      # Парсер, строящий AST
-│   │   ├── ast.js         # Доп. структуры для описания/манипуляции AST
-│   │   └── errors.js      # Классы и функции для ошибок с инфой о файле/строке
+│   │   ├── js/
+│   │   │   ├── lexer.js   # JS lexical analyzer
+│   │   │   └── parser.js  # Parser that builds the AST
+│   │   ├── python/
+│   │   │   ├── lexer.js   # Python lexical analyzer
+│   │   │   └── parser.js  # Parser that builds the AST
+│   │   ├── ast.js         # Additional structures for describing/manipulating the AST
+│   │   ├── errors.js      # Classes and functions for errors with file/line info
+│   │   ├── token-lexer.js
+│   │   ├── token-stream.js
+│   │   └── utils.js
 │   ├── transpilers/
-│   │   ├── python2js.js   # Транспилер Python -> JS
-│   │   ├── js2python.js   # Транспилер JS -> Python
+│   │   ├── python2js.js   # Transpiler Python -> JS
+│   │   ├── js2python.js   # Transpiler JS -> Python
 │   │   └── ...
 │   ├── runtime/
-│   │   ├── browser.js     # Обработчик "браузерного" режима
-│   │   ├── node.js        # Обработчик "node"-режима
+│   │   ├── browser.js     # Handler for "browser" mode
+│   │   ├── node.js        # Handler for "node" mode
 │   │   └── ...
-│   ├── index.js           # Точка входа для импорта из src (например для CLI)
+│   ├── index.js           # Entry point for importing from src (e.g., for CLI)
 │   └── ...
 ├── test/
 │   ├── pjs/
-│   │   ├── test_scalars.pjs      # Тест: простые операции, try/except/finally
-│   │   ├── test_complex.pjs      # Тест: циклы, условия, комментарии
-│   │   ├── test_imports.pjs      # Тест: работа с импортами
-│   │   └── test_files.pjs        # Тест: чтение/запись/удаление файлов
+│   │   ├── test_scalars.pjs      # Test: basic operations, try/except/finally
+│   │   ├── test_complex.pjs      # Test: loops, conditions, comments
+│   │   ├── test_imports.pjs      # Test: imports functionality
+│   │   └── test_files.pjs        # Test: file read/write/delete
 │   ├── js/
-│   │   ├── test_scalars.js       # Аналогичные тесты, но на JS, чтобы проверить js->pjs
+│   │   ├── test_scalars.js       # Equivalent JS tests for js->pjs transpilation
 │   │   └── ...
-│   ├── runner.test.js            # Тест-раннер (Mocha/Jest/etc.)
+│   ├── runner.test.js            # Test runner (Mocha/Jest/etc.)
 │   └── ...
 ├── package.json
 └── README.md
 ```
 
-## Краткое описание работы алгоритма
+## Algorithm Overview
 
-1. **Лексер (lexer.js)**: разбивает исходный код (Python или JS) на токены (идентификаторы, числа, операторы, ключевые слова и т.д.).  
-2. **Парсер (parser.js)**: преобразует токены в AST (абстрактное синтаксическое дерево), учитывая базовый синтаксис и операторы.  
-3. **Транспилер (python2js.js/js2python.js)**: обходит AST и генерирует код на целевом языке (JS или Python).  
-4. **Runtime**: при необходимости может **запускать** полученный JS-код в Node или «виртуальном браузерном» окружении.
+1. **Lexer (lexer.js)**: breaks source code (Python or JS) into tokens (identifiers, numbers, operators, keywords, etc.).  
+2. **Parser (parser.js)**: converts tokens into an AST (abstract syntax tree), respecting basic syntax and operators.  
+3. **Transpiler (python2js.js/js2python.js)**: traverses the AST and generates code in the target language (JS or Python).  
+4. **Runtime**: optionally **runs** the resulting JS code in Node or a "virtual browser" environment.
 
-## Установка и запуск
+## Installation and Usage
 
 ### Linux / macOS
 
-1. Установить зависимости (если нужны) и сделать скрипт исполняемым:
+1. Install dependencies (if required) and make the script executable:
    ```bash
    chmod +x bin/pythonscript
    ```
-2. Транспиляция из Python в JS:
+2. Transpile from Python to JS:
    ```bash
    ./bin/pythonscript build test/pjs/test_scalars.pjs -o dist/test_scalars.out.js
    ```
-3. Запуск сгенерированного кода:
+3. Run the generated code:
    ```bash
    ./bin/pythonscript run dist/test_scalars.out.js --mode=node
    ```
-   или, при необходимости, `--mode=browser`.
+   Or, if necessary, `--mode=browser`.
 
-Аналогично для `.js -> .pjs`:
+Similarly for `.js -> .pjs`:
 ```bash
 ./bin/pythonscript build test/js/test_scalars.js -o dist/test_scalars_js.out.pjs
 cat dist/test_scalars_js.out.pjs
@@ -78,56 +87,56 @@ cat dist/test_scalars_js.out.pjs
 
 ### Windows
 
-1. В PowerShell или cmd:
+1. In PowerShell or cmd:
    ```powershell
    node .\bin\pythonscript --help
    ```
-   Вы увидите справку.
-2. Транспилировать Python->JS:
+   You will see the help menu.
+2. Transpile Python->JS:
    ```powershell
    node .\bin\pythonscript build test\pjs\test_scalars.pjs -o dist\test_scalars.out.js
    ```
-3. Запустить транспилированный JS:
+3. Run the transpiled JS:
    ```powershell
    node .\bin\pythonscript run dist\test_scalars.out.js --mode=node
    ```
-4. Аналогично для `.js -> .pjs`:
+4. Similarly for `.js -> .pjs`:
    ```powershell
    node .\bin\pythonscript build test\js\test_scalars.js -o dist\test_scalars_js.out.pjs
    type .\dist\test_scalars_js.out.pjs
    ```
 
-## Примеры работы
+## Examples
 
-- **`test_scalars.pjs`**: простые операции, try/except/finally.  
-  - Транспилируется в JS-код, при запуске выводит базовые арифметические результаты.  
-- **`test_complex.pjs`**: циклы, условия, комментарии.  
-  - Проверяет `if/else`, `for`, `while`.  
-- **`test_files.pjs`**: проверяет чтение/запись файлов (в node-режиме).  
-- **`test_imports.pjs`**: простая проверка импорта.
+- **`test_scalars.pjs`**: Basic operations, try/except/finally.  
+  - Transpiles into JS code and outputs basic arithmetic results when run.  
+- **`test_complex.pjs`**: Loops, conditions, comments.  
+  - Tests `if/else`, `for`, `while`.  
+- **`test_files.pjs`**: Reads/writes files (in node mode).  
+- **`test_imports.pjs`**: Simple import functionality.
 
-## Запуск тестов
+## Running Tests
 
-Если в `test/runner.test.js` реализован тест-раннер (Mocha, Jest или любой другой):
+If `test/runner.test.js` includes a test runner (Mocha, Jest, or any other framework):
 
 ```bash
 npm run test
 ```
 
-Внутри `runner.test.js` можно автоматически вызывать:
-1. `build(...)` для `.pjs` -> `.js`.  
-2. `run(...)` для проверки, что код запускается в node-среде без ошибок и даёт корректный вывод.  
-3. Аналогично для `.js` -> `.pjs`.
+Inside `runner.test.js`, you can automatically invoke:
+1. `build(...)` for `.pjs` -> `.js`.  
+2. `run(...)` to ensure the code runs in Node without errors and produces the correct output.  
+3. Similarly for `.js` -> `.pjs`.
 
-Если всё **выполняется без ошибок**, считается, что тесты пройдены успешно.
+If everything **executes without errors**, the tests are considered successful.
 
 ---
 
-### Краткая демонстрация
+### Quick Demonstration
 
 ```bash
 $ node ./bin/pythonscript build test/pjs/test_scalars.pjs -o dist/scalars.js
-Файл успешно транспилирован!
+File successfully transpiled!
 
 $ node ./bin/pythonscript run dist/scalars.js --mode=node
 13
@@ -138,6 +147,16 @@ $ node ./bin/pythonscript run dist/scalars.js --mode=node
 Done!
 # ...
 ```
-(Вывод совпадает с ожидаемым для `test_scalars.pjs`.)
+(Output matches the expected result for `test_scalars.pjs`.)
 
-Таким образом, **PythonScript** позволяет быстро проверить логику парсинга и трансформации простого Python-кода в JS-код и обратно.
+Thus, **PythonScript** allows you to quickly test the parsing and transformation logic of simple Python code into JS code and vice versa.
+
+### Examples
+
+ * Python to JS - from [Python code](/test/pjs/test_scalars.pjs) to [JS code](/dist/test_scalars.out.js)
+ * JS to Python - from [JS code](/test/js/test_scalars.js) to [Python code](/dist/test_scalars_js.out.pjs)
+
+### Languages
+
+* [Русский README](README.ru.md)
+* [English README](README.md)
