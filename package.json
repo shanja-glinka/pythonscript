@@ -1,0 +1,24 @@
+{
+  "name": "pythonscript",
+  "version": "0.0.1",
+  "description": "Its a pythonscript like a javascript but it is pythonscript on javascript but look loke a python on javascript. yes?",
+  "main": "index.js",
+  "scripts": {
+    "test": "test_it_rightnow"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iLoveGachimuchi/pythonscript.git"
+  },
+  "keywords": [
+    "pythonscript",
+    "javascript",
+    "its_for_reatrds_as_I_am"
+  ],
+  "author": "Gachi martyr",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/iLoveGachimuchi/pythonscript/issues"
+  },
+  "homepage": "https://github.com/iLoveGachimuchi/pythonscript#readme"
+}
