@@ -9,5 +9,10 @@ pythscr_conf.set_runner(0);
 
 var pythscr = new pythonscript_controller(pythscr_conf);
 pythscr.run(
-`print("hello world")`
+`'''bruh'''
+#bruh
+"""br
+u
+        h"""
+print("hello world")`
 )
