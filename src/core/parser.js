@@ -545,6 +545,14 @@ function parsePythonStatement(stream) {
   const token = stream.current();
   if (!token) return null;
 
+  if (token.type === "COMMENT") {
+    stream.next(); // Пропускаем комментарий
+    return new ASTNode("Comment", {
+      value: token.value,
+      loc: { line: token.line, col: token.col },
+    });
+  }
+
   // Проверяем KEYWORD
   if (token.type === "KEYWORD") {
     switch (token.value) {

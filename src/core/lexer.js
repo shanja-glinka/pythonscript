@@ -353,7 +353,9 @@ export function tokenizePython(code, fileName = "<anonymous>") {
         addToken("DEDENT", "");
       }
       if (indentLevel !== indentStack[indentStack.length - 1]) {
-        throw new PScriptError(`Некорректный отступ на линии ${line}, колонка ${col}`);
+        throw new PScriptError(
+          `Некорректный отступ на линии ${line}, колонка ${col}`
+        );
       }
     }
   }
@@ -465,7 +467,9 @@ export function tokenizePython(code, fileName = "<anonymous>") {
         advance();
       }
       if (currentChar() !== quoteType) {
-        throw new PScriptError(`Не закрытая строка на линии ${line}, колонка ${col}`);
+        throw new PScriptError(
+          `Не закрытая строка на линии ${line}, колонка ${col}`
+        );
       }
       advance(); // Пропускаем закрывающую кавычку
       addToken("STRING", strVal);
@@ -483,8 +487,8 @@ export function tokenizePython(code, fileName = "<anonymous>") {
       continue;
     }
 
-     // Идентификатор или ключевое слово
-     if (isAlpha(ch)) {
+    // Идентификатор или ключевое слово
+    if (isAlpha(ch)) {
       let ident = "";
       while (isAlnum(currentChar())) {
         ident += currentChar();
