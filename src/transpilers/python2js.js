@@ -155,6 +155,24 @@ export function pythonASTtoJS(ast) {
         return `(!${rightJS}.includes(${leftJS}))`;
       }
 
+    case "FStringLiteral":
+      // segments: [{type: "text", value: "Hello "}, {type:"expr", expr: ...}, ...]
+      // Собираем parts = []
+      let parts = [];
+      for (let seg of ast.segments) {
+        if (seg.type === "text") {
+          // Экранируем обратные кавычки и т.д.
+          parts.push(seg.value.replace(/`/g, "\\`"));
+        } else if (seg.type === "expr") {
+          // Рекурсивно генерируем JS-код для expr
+          let exprJS = pythonASTtoJS(seg.expr);
+          // Оборачиваем в ${...}
+          parts.push("${" + exprJS + "}");
+        }
+      }
+      // Склеиваем
+      return "`" + parts.join("") + "`";
+
     default:
       // Если не знаем, вернём пустую строку или комментарий
       return `/* Unhandled Python AST node: ${ast.type} */`;

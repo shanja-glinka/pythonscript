@@ -44,6 +44,7 @@ print("Сумма obj.x + obj.y =", obj['x'] + obj['y'])
 # Небольшая функция для сравнения значений
 def compare_values(x, y):
     if x > y:
+        print("Результат:", "{x} > {y}")
         print(f"{x} > {y}")
     elif x < y:
         print(f"{x} < {y}")

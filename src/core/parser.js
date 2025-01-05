@@ -1,5 +1,6 @@
 import { ASTNode } from "./ast.js";
 import { PScriptError } from "./errors.js";
+import { tokenizePython } from "./lexer.js";
 
 //
 function parsePower(stream) {
@@ -109,6 +110,84 @@ function parseListLiteral(stream) {
   return new ASTNode("ListLiteral", { elements });
 }
 
+function parseFStringInnerExpression(exprContent, fileName, line, col) {
+  // Лексируем exprContent (самостоятельно)
+  const tokens = tokenizePython(exprContent, fileName);
+  // tokenizePython - ваш лексер
+  // затем делаем новый TokenStream
+  const stream = new TokenStream(tokens, fileName);
+  // и вызываем parsePythonExpression (или parseMembership)
+  let expr = parsePythonExpression(stream);
+
+  if (stream.current()) {
+    // Если после разбора что-то осталось - возможно ошибка
+    // (или в реальности можно склеивать, но упрощённо)
+    throw new PScriptError(
+      "Лишние символы внутри f-строки после выражения",
+      fileName,
+      line,
+      col
+    );
+  }
+
+  return expr;
+}
+
+function parseFStringContent(raw, fileName, line, col) {
+  // Разделим по '{' и '}'
+  // Надо аккуратно поддерживать вложенные фигурные скобки и экранирование, но упрощаем.
+  // Самый простой подход: split по '{' -> потом внутри split по '}', etc.
+  // Внимание: это "наивно" и не обрабатывает случаи {{ или }}.
+
+  let segments = [];
+  let currentText = "";
+  let i = 0;
+  while (i < raw.length) {
+    if (raw[i] === "{") {
+      // Сохраняем накопленный текст как segment
+      if (currentText.length > 0) {
+        segments.push({ type: "text", value: currentText });
+        currentText = "";
+      }
+
+      // ищем закрывающую '}'
+      let j = raw.indexOf("}", i + 1);
+      if (j === -1) {
+        throw new PScriptError(
+          "Не найдена закрывающая '}' в f-строке",
+          fileName,
+          line,
+          col
+        );
+      }
+      // Вытаскиваем содержимое между { ... }
+      let exprContent = raw.slice(i + 1, j).trim();
+      // Парсим это как python-выражение:
+      let exprAst = parseFStringInnerExpression(
+        exprContent,
+        fileName,
+        line,
+        col
+      );
+
+      segments.push({ type: "expr", expr: exprAst });
+
+      i = j + 1; // пропускаем '}'
+    } else {
+      // Просто символ текста
+      currentText += raw[i];
+      i++;
+    }
+  }
+
+  // если остался хвост текста
+  if (currentText.length > 0) {
+    segments.push({ type: "text", value: currentText });
+  }
+
+  return new ASTNode("FStringLiteral", { segments });
+}
+
 // Обрабатывает (expr), NUMBER, STRING, IDENTIFIER, [list-literal], {dict?}, и т.д.// обрабатывает числа, идентификаторы, ( expr ), унарный минус и т.д.
 function parseAtom(stream) {
   const token = stream.current();
@@ -135,6 +214,18 @@ function parseAtom(stream) {
     }
     stream.next(); // пропускаем ')'
     return expr;
+  }
+
+  // Objects
+  if (token.type === "OP" && token.value === "{") {
+    return parseDictLiteral(stream);
+  }
+
+  // F-string
+  if (token.type === "FSTRING") {
+    stream.next();
+    const raw = token.value; // Например: Hello {name}, you have {count} messages.
+    return parseFStringContent(raw, stream.fileName, token.line, token.col);
   }
 
   // NUMBER ?
@@ -279,43 +370,95 @@ function parseFactor(stream) {
   return node;
 }
 
-
 function parseMembership(stream) {
   // Предположим, у нас есть parseComparison, обрабатывающая <, >, ==, !=, ...
   let left = parseComparison(stream);
-  
+
   while (true) {
     const cur = stream.current();
     if (!cur) break;
-    
+
     // Проверяем, не встретили ли мы ключевое слово 'in'
-    if (cur.type === 'KEYWORD' && cur.value === 'in') {
+    if (cur.type === "KEYWORD" && cur.value === "in") {
       // membership: left in right
       stream.next(); // пропускаем 'in'
       const right = parseComparison(stream);
-      left = new ASTNode('MembershipTest', { op: 'in', left, right });
+      left = new ASTNode("MembershipTest", { op: "in", left, right });
     }
     // Может быть 'not in'
     else if (
-      cur.type === 'KEYWORD' &&
-      cur.value === 'not' &&
+      cur.type === "KEYWORD" &&
+      cur.value === "not" &&
       stream.peek(1) &&
-      stream.peek(1).type === 'KEYWORD' &&
-      stream.peek(1).value === 'in'
+      stream.peek(1).type === "KEYWORD" &&
+      stream.peek(1).value === "in"
     ) {
       // left not in right
       stream.next(); // пропускаем 'not'
       stream.next(); // пропускаем 'in'
       const right = parseComparison(stream);
-      left = new ASTNode('MembershipTest', { op: 'not in', left, right });
-    }
-    else {
+      left = new ASTNode("MembershipTest", { op: "not in", left, right });
+    } else {
       // никаких 'in' / 'not in' — выходим
       break;
     }
   }
-  
+
   return left;
+}
+
+function parseDictLiteral(stream) {
+  // Уже знаем, что текущий токен = '{'
+  stream.next(); // пропускаем '{'
+
+  const pairs = [];
+
+  // Читаем пары вида key : value
+  while (
+    stream.current() &&
+    !(stream.current().type === "OP" && stream.current().value === "}")
+  ) {
+    // Ключ может быть STRING или IDENTIFIER (или другое выражение).
+    // Упрощённо предположим STRING или IDENTIFIER:
+    const keyToken = stream.current();
+    if (keyToken.type !== "STRING" && keyToken.type !== "IDENTIFIER") {
+      throw new PScriptError(
+        `Ожидался ключ словаря (STRING или IDENTIFIER) перед двоеточием`,
+        stream.fileName,
+        keyToken.line,
+        keyToken.col
+      );
+    }
+    stream.next(); // пропускаем ключ
+
+    // Ожидаем двоеточие
+    stream.expect("OP", ":");
+
+    // Парсим value как полноценное выражение
+    const valueExpr = parsePythonExpression(stream);
+    // (или parseMembership, parseComparison, ... если у вас есть единый верхний парсер)
+
+    pairs.push({
+      key: keyToken.value,
+      value: valueExpr,
+    });
+
+    // Может идти запятая
+    if (
+      stream.current() &&
+      stream.current().type === "OP" &&
+      stream.current().value === ","
+    ) {
+      stream.next(); // пропускаем ','
+    } else {
+      break;
+    }
+  }
+
+  // Закрывающая '}'
+  stream.expect("OP", "}");
+
+  return new ASTNode("DictLiteral", { pairs });
 }
 
 /**
