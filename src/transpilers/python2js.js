@@ -113,6 +113,17 @@ export function pythonASTtoJS(ast) {
     case "Variable":
       return ast.name;
 
+    case "BinOp":
+      if (ast.op === "**") {
+        // JS тоже умеет оператор **
+        return `(${pythonASTtoJS(ast.left)} ** ${pythonASTtoJS(ast.right)})`;
+      } else {
+        // остальные +, -, * и т.д.
+        return `(${pythonASTtoJS(ast.left)} ${ast.op} ${pythonASTtoJS(
+          ast.right
+        )})`;
+      }
+
     default:
       // Если не знаем, вернём пустую строку или комментарий
       return `/* Unhandled Python AST node: ${ast.type} */`;
