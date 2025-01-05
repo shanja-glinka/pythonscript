@@ -64,6 +64,31 @@ const KEYWORDS_JS = new Set([
   "console",
 ]);
 
+const SINGLE_OPS = new Set([
+  "+",
+  "-",
+  "*",
+  "/",
+  "%",
+  "=",
+  "<",
+  ">",
+  "(",
+  ")",
+  "[",
+  "]",
+  "{",
+  "}",
+  ":",
+  ",",
+  ".",
+  "**",
+  "//",
+  "==",
+  "!=",
+  "<=",
+  ">=",
+]);
 export function tokenizeJavaScript(code, fileName = "<anonymous>") {
   // Здесь для демонстрации — сделаем "похожий" лексер,
 
@@ -269,6 +294,7 @@ export function tokenizePython(code, fileName = "<anonymous>") {
   let col = 1;
 
   const tokens = [];
+  const indentStack = [0]; // Начальный уровень отступа
 
   /**
    * Возвращает текущий символ (или '\0', если вышли за конец).
@@ -281,7 +307,7 @@ export function tokenizePython(code, fileName = "<anonymous>") {
    * Сдвигаемся на n символов вперёд, обновляя line/col.
    */
   function advance(n = 1) {
-    while (n--) {
+    while (n-- && pos < code.length) {
       if (code[pos] === "\n") {
         line++;
         col = 1;
@@ -299,20 +325,54 @@ export function tokenizePython(code, fileName = "<anonymous>") {
     tokens.push(new Token(type, value, line, col));
   }
 
+  function handleIndentation() {
+    let start = pos;
+    let currentLine = "";
+    while (currentChar() === " " || currentChar() === "\t") {
+      currentLine += currentChar();
+      advance();
+    }
+
+    // Если строка пустая или комментарий, игнорируем отступ
+    if (
+      currentChar() === "\n" ||
+      currentChar() === "#" ||
+      currentChar() === "\0"
+    ) {
+      return;
+    }
+
+    const indentLevel = currentLine.replace(/\t/g, "    ").length; // Преобразуем табы в 4 пробела
+
+    if (indentLevel > indentStack[indentStack.length - 1]) {
+      indentStack.push(indentLevel);
+      addToken("INDENT", "");
+    } else {
+      while (indentLevel < indentStack[indentStack.length - 1]) {
+        indentStack.pop();
+        addToken("DEDENT", "");
+      }
+      if (indentLevel !== indentStack[indentStack.length - 1]) {
+        throw new PScriptError(`Некорректный отступ на линии ${line}, колонка ${col}`);
+      }
+    }
+  }
+
   // Основной цикл лексера
   while (pos < code.length) {
     let ch = currentChar();
 
-    // Пробелы, табы
-    if (ch === " " || ch === "\t" || ch === "\r") {
+    // Обработка новых строк
+    if (ch === "\n") {
+      addToken("NEWLINE", "\n");
       advance();
+      handleIndentation();
       continue;
     }
 
-    // Перенос строки
-    if (ch === "\n") {
+    // Пробелы и табы (пропускаем, если не в начале строки)
+    if (ch === " " || ch === "\t" || ch === "\r") {
       advance();
-      // Можем при желании добавить токен NEWLINE, но чаще его пропускают
       continue;
     }
 
@@ -322,74 +382,100 @@ export function tokenizePython(code, fileName = "<anonymous>") {
         advance();
         ch = currentChar();
       }
-      continue; // пропустили комментарий
+      continue; // Пропустили комментарий
     }
 
-    // Проверка на f-string: f"..." или f'...'
+    // f-строки
     if (ch === "f" && (code[pos + 1] === '"' || code[pos + 1] === "'")) {
-      const quote = code[pos + 1]; // '"' или "'"
-      advance(2); // пропускаем 'f' + саму кавычку
-
+      const quoteType = code[pos + 1];
       let strVal = "";
-      while (pos < code.length && currentChar() !== quote) {
+      advance(2); // Пропускаем 'f' и открывающую кавычку
+      while (pos < code.length && currentChar() !== quoteType) {
         if (currentChar() === "\\") {
           // Обработка экранирования
-          strVal += currentChar();
           advance();
-          if (currentChar() !== "\0") {
-            strVal += currentChar();
-            advance();
+          const escapeChar = currentChar();
+          switch (escapeChar) {
+            case "n":
+              strVal += "\n";
+              break;
+            case "t":
+              strVal += "\t";
+              break;
+            case "\\":
+              strVal += "\\";
+              break;
+            case '"':
+              strVal += '"';
+              break;
+            case "'":
+              strVal += "'";
+              break;
+            default:
+              strVal += escapeChar;
           }
         } else {
           strVal += currentChar();
-          advance();
         }
+        advance();
       }
-      if (currentChar() !== quote) {
-        throw new PScriptError("Не закрытая f-строка", fileName, line, col);
+      if (currentChar() !== quoteType) {
+        throw new PScriptError(
+          `Не закрытая f-строка на линии ${line}, колонка ${col}`
+        );
       }
-      advance(); // пропустить закрывающую кавычку
+      advance(); // Пропускаем закрывающую кавычку
 
       addToken("FSTRING", strVal);
       continue;
     }
 
-    // Строка (одинарные или двойные кавычки)
+    // Строки
     if (ch === '"' || ch === "'") {
-      const quote = ch;
+      const quoteType = ch;
       let strVal = "";
-      advance(); // пропускаем открытую кавычку
-      while (pos < code.length && currentChar() !== quote) {
+      advance(); // Пропускаем открывающую кавычку
+      while (pos < code.length && currentChar() !== quoteType) {
         if (currentChar() === "\\") {
           // Обработка экранирования
-          strVal += currentChar();
           advance();
-          if (currentChar() !== "\0") {
-            strVal += currentChar();
-            advance();
+          const escapeChar = currentChar();
+          switch (escapeChar) {
+            case "n":
+              strVal += "\n";
+              break;
+            case "t":
+              strVal += "\t";
+              break;
+            case "\\":
+              strVal += "\\";
+              break;
+            case '"':
+              strVal += '"';
+              break;
+            case "'":
+              strVal += "'";
+              break;
+            default:
+              strVal += escapeChar;
           }
         } else {
           strVal += currentChar();
-          advance();
         }
+        advance();
       }
-      if (currentChar() !== quote) {
-        throw new PScriptError("Не закрытая строка", fileName, line, col);
+      if (currentChar() !== quoteType) {
+        throw new PScriptError(`Не закрытая строка на линии ${line}, колонка ${col}`);
       }
-      advance(); // пропустить закрывающую кавычку
+      advance(); // Пропускаем закрывающую кавычку
       addToken("STRING", strVal);
       continue;
     }
 
-    // Число (целое или с плавающей точкой)
-    if (isDigit(ch)) {
+    // Числа
+    if (/\d/.test(ch)) {
       let numStr = "";
-      let hasDot = false;
-      while (isDigit(currentChar()) || currentChar() === ".") {
-        if (currentChar() === ".") {
-          if (hasDot) break; // вторая точка — выходим
-          hasDot = true;
-        }
+      while (/\d/.test(currentChar()) || currentChar() === ".") {
         numStr += currentChar();
         advance();
       }
@@ -397,8 +483,8 @@ export function tokenizePython(code, fileName = "<anonymous>") {
       continue;
     }
 
-    // Идентификатор или ключевое слово
-    if (isAlpha(ch)) {
+     // Идентификатор или ключевое слово
+     if (isAlpha(ch)) {
       let ident = "";
       while (isAlnum(currentChar())) {
         ident += currentChar();
@@ -412,68 +498,40 @@ export function tokenizePython(code, fileName = "<anonymous>") {
       continue;
     }
 
-    // Многосимвольные операторы: //, **, ==, !=, <=, >=
-    if (ch === "/" && code[pos + 1] === "/") {
-      addToken("OP", "//");
-      advance(2);
+    // Многосимвольные операторы
+    const twoCharOps = new Set(["//", "**", "==", "!=", "<=", ">="]);
+    const threeCharOps = new Set(); // В Python нет трехсимвольных операторов по умолчанию
+    let op = code.slice(pos, pos + 3);
+    if (threeCharOps.has(op)) {
+      addToken("OP", op);
+      advance(3);
       continue;
     }
-    if (ch === "*" && code[pos + 1] === "*") {
-      addToken("OP", "**");
-      advance(2);
-      continue;
-    }
-    if (ch === "=" && code[pos + 1] === "=") {
-      addToken("OP", "==");
-      advance(2);
-      continue;
-    }
-    if (ch === "!" && code[pos + 1] === "=") {
-      addToken("OP", "!=");
-      advance(2);
-      continue;
-    }
-    if (ch === "<" && code[pos + 1] === "=") {
-      addToken("OP", "<=");
-      advance(2);
-      continue;
-    }
-    if (ch === ">" && code[pos + 1] === "=") {
-      addToken("OP", ">=");
+    op = code.slice(pos, pos + 2);
+    if (twoCharOps.has(op)) {
+      addToken("OP", op);
       advance(2);
       continue;
     }
 
-    // Односимвольные операторы и разделители
-    const singleOps = new Set([
-      "+",
-      "-",
-      "*",
-      "/",
-      "%",
-      "=",
-      "<",
-      ">",
-      "(",
-      ")",
-      "[",
-      "]",
-      "{",
-      "}",
-      ":",
-      ",",
-      ".",
-    ]);
-    if (singleOps.has(ch)) {
+    // Односимвольные операторы
+    if (SINGLE_OPS.has(ch)) {
       addToken("OP", ch);
       advance();
       continue;
     }
 
-    // Если дошли сюда — неизвестный символ
-    throw new PScriptError(`Неизвестный символ '${ch}'`, fileName, line, col);
+    // Если символ не распознан
+    throw new PScriptError(
+      `Неизвестный символ '${ch}' на линии ${line}, колонка ${col}`
+    );
   }
 
-  // Возвращаем готовый список токенов
+  // Добавляем DEDENT токены до базового уровня
+  while (indentStack.length > 1) {
+    indentStack.pop();
+    addToken("DEDENT", "");
+  }
+
   return tokens;
 }
