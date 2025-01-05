@@ -1,4 +1,5 @@
 export function pythonASTtoJS(ast, context = {}) {
+  // return JSON.stringify(ast);
   if (!ast) return "";
 
   switch (ast.type) {
@@ -19,6 +20,16 @@ export function pythonASTtoJS(ast, context = {}) {
           .map((a) => pythonASTtoJS(a, context))
           .join(", ")});`;
       }
+
+      // Определяем, является ли левая часть атрибутом (например, this.name)
+      if (ast.left.type === "AttributeAccess") {
+        return `${pythonASTtoJS(ast.left, context)} = ${pythonASTtoJS(
+          ast.right,
+          context
+        )};`;
+      }
+
+      // В остальных случаях добавляем let
       return `let ${pythonASTtoJS(ast.left, context)} = ${pythonASTtoJS(
         ast.right,
         context
