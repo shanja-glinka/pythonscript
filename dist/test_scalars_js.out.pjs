@@ -1,0 +1,214 @@
+# Unhandled JS AST node: UnknownExpression
+a = 0  # упрощено
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+b = 0  # упрощено
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+log
+# Unhandled JS AST node: UnknownExpression
+a
+# Unhandled JS AST node: UnknownExpression
+b
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+log
+# Unhandled JS AST node: UnknownExpression
+a
+# Unhandled JS AST node: UnknownExpression
+b
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+log
+# Unhandled JS AST node: UnknownExpression
+a
+# Unhandled JS AST node: UnknownExpression
+b
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+log
+# Unhandled JS AST node: UnknownExpression
+a
+# Unhandled JS AST node: UnknownExpression
+b
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+log
+# Unhandled JS AST node: UnknownExpression
+a
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+b
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+try:
+    pass
+except:
+    pass
+finally:
+    pass
+
+if True:
+    pass
+  # Упрощённый if
+
+# Unhandled JS AST node: UnknownExpression
+arr = 0  # упрощено
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+log
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+arr
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+arr
+# Unhandled JS AST node: UnknownExpression
+push
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+log
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+arr
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+arr
+# Unhandled JS AST node: UnknownExpression
+pop
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+log
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+arr
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+log
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+arr
+# Unhandled JS AST node: UnknownExpression
+includes
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+obj = 0  # упрощено
+x
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+y
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+log
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+obj
+# Unhandled JS AST node: UnknownExpression
+x
+# Unhandled JS AST node: UnknownExpression
+obj
+# Unhandled JS AST node: UnknownExpression
+y
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+def compareValues(x, y):
+    if True:
+    pass
+  # Упрощённый if
+
+    if True:
+    pass
+  # Упрощённый if
+
+
+compareValues
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+compareValues
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+compareValues
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+class Person:
+    pass
+
+sayHello
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+log
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+person = 0  # упрощено
+Person
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+person
+# Unhandled JS AST node: UnknownExpression
+sayHello
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
+# Unhandled JS AST node: UnknownExpression
