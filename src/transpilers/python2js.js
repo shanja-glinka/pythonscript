@@ -141,6 +141,20 @@ export function pythonASTtoJS(ast) {
       return `${objJS}[${idxJS}]`;
     }
 
+    case "MembershipTest":
+      if (ast.op === "in") {
+        // Python:  X in Y
+        // JS:       Y.includes(X)
+        // (Если y - это массив. Если это объект, логика другая, но упрощённо предположим массив.)
+        const leftJS = pythonASTtoJS(ast.left);
+        const rightJS = pythonASTtoJS(ast.right);
+        return `${rightJS}.includes(${leftJS})`;
+      } else if (ast.op === "not in") {
+        const leftJS = pythonASTtoJS(ast.left);
+        const rightJS = pythonASTtoJS(ast.right);
+        return `(!${rightJS}.includes(${leftJS}))`;
+      }
+
     default:
       // Если не знаем, вернём пустую строку или комментарий
       return `/* Unhandled Python AST node: ${ast.type} */`;

@@ -86,8 +86,8 @@ function parseListLiteral(stream) {
     stream.current() &&
     !(stream.current().type === "OP" && stream.current().value === "]")
   ) {
-    // Каждый элемент — полноценное выражение, например parseComparison или parseExpr
-    const elem = parseExpr(stream);
+    // Каждый элемент — полноценное выражение, например parseMembership
+    const elem = parsePythonExpression(stream);
     elements.push(elem);
 
     // Если видим ',', пропускаем
@@ -109,9 +109,8 @@ function parseListLiteral(stream) {
   return new ASTNode("ListLiteral", { elements });
 }
 
-// parseFactor парсит числа, идентификаторы, скобки (…)
-function parseFactor(stream) {
-  // обрабатывает числа, идентификаторы, ( expr ), унарный минус и т.д.
+// Обрабатывает (expr), NUMBER, STRING, IDENTIFIER, [list-literal], {dict?}, и т.д.// обрабатывает числа, идентификаторы, ( expr ), унарный минус и т.д.
+function parseAtom(stream) {
   const token = stream.current();
   if (!token) {
     throw new PScriptError(
@@ -173,13 +172,11 @@ function parseFactor(stream) {
     return node;
   }
 
-  
-
   // [ expr ]
   if (token.type === "OP" && token.value === "[") {
     return parseListLiteral(stream);
   }
-  
+
   // Если хотим поддержать унарный минус:  -(expr)
   // if (token.type === "OP" && token.value === '-') { ... }
 
@@ -189,6 +186,136 @@ function parseFactor(stream) {
     token.line,
     token.col
   );
+}
+
+function parseCallArguments(stream, calleeNode) {
+  // парсим скобки ( ... )
+  // допустим, уже знаем, что cur.value === '('
+  stream.expect("OP", "(");
+
+  const args = [];
+  while (
+    stream.current() &&
+    !(stream.current().type === "OP" && stream.current().value === ")")
+  ) {
+    const argExpr = parseMembership(stream);
+    args.push(argExpr);
+    if (
+      stream.current() &&
+      stream.current().type === "OP" &&
+      stream.current().value === ","
+    ) {
+      stream.next(); // пропустить ','
+    } else {
+      break;
+    }
+  }
+  stream.expect("OP", ")");
+
+  return new ASTNode("CallExpression", {
+    callee: calleeNode,
+    args,
+  });
+}
+
+// parseFactor парсит числа, идентификаторы, скобки (…)
+function parseFactor(stream) {
+  // 1) Парсим базовый атом (число, строка, идентификатор, (expr), список [...], etc.)
+  let node = parseAtom(stream);
+
+  // 2) Теперь, возможно, идёт несколько «постфиксов», наподобие .attr, [expr], (call_args)
+  while (true) {
+    const cur = stream.current();
+    if (!cur || cur.type !== "OP") {
+      break;
+    }
+
+    if (cur.value === ".") {
+      // доступ к атрибуту: obj.attr
+      stream.next(); // пропустить '.'
+      const attrToken = stream.current();
+      if (!attrToken || attrToken.type !== "IDENTIFIER") {
+        throw new PScriptError(
+          `Ожидался идентификатор после '.'`,
+          stream.fileName,
+          attrToken?.line || 0,
+          attrToken?.col || 0
+        );
+      }
+      stream.next(); // пропустить имя атрибута
+
+      // создаём AST-узел AttributeAccess
+      node = new ASTNode("AttributeAccess", {
+        object: node,
+        attribute: attrToken.value,
+      });
+
+      // Может ли сразу после attr идти '(' ? — тогда это вызов метода.
+      // Например, arr.append(4). Если хотите поддержать вызовы, делаете ещё проверку:
+      if (
+        stream.current() &&
+        stream.current().type === "OP" &&
+        stream.current().value === "("
+      ) {
+        node = parseCallArguments(stream, node);
+        // parseCallArguments — ваша функция, создающая AST-узел 'CallExpression', где callee = node
+      }
+    } else if (cur.value === "[") {
+      // Индексация: obj[expr]
+      stream.next(); // пропустить '['
+      const indexExpr = parseExpr(stream);
+      stream.expect("OP", "]");
+      node = new ASTNode("IndexAccess", { object: node, index: indexExpr });
+    } else if (cur.value === "(") {
+      // Вызов функции (или метода) без точки: foo(...)
+      // Но если node === Variable('foo'), то это вызов функции foo(...)
+      // Если node === AttributeAccess(...), то arr.append(...) и т.п.
+      node = parseCallArguments(stream, node);
+    } else {
+      break; // никаких постфиксов
+    }
+  }
+
+  return node;
+}
+
+
+function parseMembership(stream) {
+  // Предположим, у нас есть parseComparison, обрабатывающая <, >, ==, !=, ...
+  let left = parseComparison(stream);
+  
+  while (true) {
+    const cur = stream.current();
+    if (!cur) break;
+    
+    // Проверяем, не встретили ли мы ключевое слово 'in'
+    if (cur.type === 'KEYWORD' && cur.value === 'in') {
+      // membership: left in right
+      stream.next(); // пропускаем 'in'
+      const right = parseComparison(stream);
+      left = new ASTNode('MembershipTest', { op: 'in', left, right });
+    }
+    // Может быть 'not in'
+    else if (
+      cur.type === 'KEYWORD' &&
+      cur.value === 'not' &&
+      stream.peek(1) &&
+      stream.peek(1).type === 'KEYWORD' &&
+      stream.peek(1).value === 'in'
+    ) {
+      // left not in right
+      stream.next(); // пропускаем 'not'
+      stream.next(); // пропускаем 'in'
+      const right = parseComparison(stream);
+      left = new ASTNode('MembershipTest', { op: 'not in', left, right });
+    }
+    else {
+      // никаких 'in' / 'not in' — выходим
+      break;
+    }
+  }
+  
+  return left;
 }
 
 /**
@@ -400,7 +527,7 @@ function parsePythonFunction(stream) {
 function parsePythonIf(stream) {
   // if <expr>: <statements> [elif <expr>: <statements>] [else: <statements>]
   const start = stream.expect("KEYWORD", "if");
-  const condition = parseComparison(stream);
+  const condition = parseMembership(stream);
   stream.expect("OP", ":");
   const ifBody = [];
   while (
@@ -597,7 +724,7 @@ function parsePythonExpression(stream) {
     // Простейший метод: парсим выражения, разделённые запятыми, до ')'
     while (stream.current() && stream.current().value !== ")") {
       // Вызываем parseExpr (или parsePythonExpression) для одного аргумента
-      const exprNode = parseExpr(stream);
+      const exprNode = parseMembership(stream);
       args.push(exprNode);
 
       if (stream.current() && stream.current().value === ",") {
@@ -630,7 +757,7 @@ function parsePythonExpression(stream) {
     });
   }
 
-  return parseExpr(stream);
+  return parseMembership(stream);
 
   // Если это строка, число или идентификатор — вернем литерал (или Variable)
   if (token.type === "STRING") {
