@@ -115,10 +115,15 @@ export function pythonASTtoJS(ast) {
 
     case "BinOp":
       if (ast.op === "**") {
-        // JS тоже умеет оператор **
+        // Возведение в степень
         return `(${pythonASTtoJS(ast.left)} ** ${pythonASTtoJS(ast.right)})`;
+      } else if (ast.op === "//") {
+        // Целочисленное деление
+        const leftJS = pythonASTtoJS(ast.left);
+        const rightJS = pythonASTtoJS(ast.right);
+        return `Math.floor(${leftJS} / ${rightJS})`;
       } else {
-        // остальные +, -, * и т.д.
+        // +, -, *, /, % и т.д.
         return `(${pythonASTtoJS(ast.left)} ${ast.op} ${pythonASTtoJS(
           ast.right
         )})`;
