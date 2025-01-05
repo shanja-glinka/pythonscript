@@ -1,0 +1,18 @@
+# Тест: чтение, запись, удаление
+# Предполагаем, что в Node-режиме будет доступ к fs,
+# а в browser-режиме это либо исключение, либо "виртуальная" fs.
+
+import fs
+
+filename = "test_output.txt"
+content = "Hello, file system!"
+
+fs.writeFile(filename, content)
+read_data = fs.readFile(filename)
+print("Read data: ", read_data)
+
+fs.deleteFile(filename)
+try:
+    fs.readFile(filename)
+except:
+    print("File doesn't exist, as expected.")
