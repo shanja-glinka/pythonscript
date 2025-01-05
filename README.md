@@ -1,4 +1,16 @@
-```sh
+# PythonScript
+
+**PythonScript** — это упрощённый интерпретатор-транспилер, позволяющий:
+
+- **транслировать** код на Python (подмножество) в JavaScript,
+- **обратно** транспилировать JS (подмножество) в Python,
+- **запускать** полученный код в различных режимах (Node, Browser).
+
+Он **не** является полноценной реализацией всего стандарта Python или JS, но даёт представление об архитектуре лексера, парсера и генератора кода.
+
+## Структура проекта
+
+```bash
 pythonscript/
 ├── bin/
 │   └── pythonscript       # CLI-скрипт (исполняемый файл для запуска из терминала)
@@ -15,7 +27,7 @@ pythonscript/
 │   ├── runtime/
 │   │   ├── browser.js     # Обработчик "браузерного" режима
 │   │   ├── node.js        # Обработчик "node"-режима
-│   │   ├── ...
+│   │   └── ...
 │   ├── index.js           # Точка входа для импорта из src (например для CLI)
 │   └── ...
 ├── test/
@@ -33,109 +45,99 @@ pythonscript/
 └── README.md
 ```
 
+## Краткое описание работы алгоритма
 
-## How it start?
+1. **Лексер (lexer.js)**: разбивает исходный код (Python или JS) на токены (идентификаторы, числа, операторы, ключевые слова и т.д.).  
+2. **Парсер (parser.js)**: преобразует токены в AST (абстрактное синтаксическое дерево), учитывая базовый синтаксис и операторы.  
+3. **Транспилер (python2js.js/js2python.js)**: обходит AST и генерирует код на целевом языке (JS или Python).  
+4. **Runtime**: при необходимости может **запускать** полученный JS-код в Node или «виртуальном браузерном» окружении.
 
-#### Linux
+## Установка и запуск
 
-Установите зависимости (если нужны) и сделайте
-```sh
-chmod +x bin/pythonscript
+### Linux / macOS
+
+1. Установить зависимости (если нужны) и сделать скрипт исполняемым:
+   ```bash
+   chmod +x bin/pythonscript
+   ```
+2. Транспиляция из Python в JS:
+   ```bash
+   ./bin/pythonscript build test/pjs/test_scalars.pjs -o dist/test_scalars.out.js
+   ```
+3. Запуск сгенерированного кода:
+   ```bash
+   ./bin/pythonscript run dist/test_scalars.out.js --mode=node
+   ```
+   или, при необходимости, `--mode=browser`.
+
+Аналогично для `.js -> .pjs`:
+```bash
+./bin/pythonscript build test/js/test_scalars.js -o dist/test_scalars_js.out.pjs
+cat dist/test_scalars_js.out.pjs
 ```
 
-Запустите, например:
+### Windows
 
-```sh
-./bin/pythonscript build test/pjs/test_scalars.pjs -o out_scalars.js
-./bin/pythonscript run out_scalars.js --mode=node
-```
-
-Аналогично для .js -> .pjs:
-
-```sh
-./bin/pythonscript build test/js/test_scalars.js -o out_scalars.pjs
-cat out_scalars.pjs
-```
-
-#### Windows
-1. Запустите:
+1. В PowerShell или cmd:
    ```powershell
    node .\bin\pythonscript --help
    ```
-   или
+   Вы увидите справку.
+2. Транспилировать Python->JS:
    ```powershell
    node .\bin\pythonscript build test\pjs\test_scalars.pjs -o dist\test_scalars.out.js
    ```
-   Если все пути прописаны верно и нет ошибок, увидите вывод либо справку, либо сообщение об успешной транспиляции.
-
-## Testing
-#### 1. Проверка работы на примере
-
-Допустим, у нас есть файл `test_scalars.pjs` в папке `test\pjs\`. Запустим:
-
-1. **Транспиляция** `test_scalars.pjs` в JavaScript:
-
+3. Запустить транспилированный JS:
    ```powershell
-   node .\bin\pythonscript build .\test\pjs\test_scalars.pjs -o .\dist\test_scalars.out.js
+   node .\bin\pythonscript run dist\test_scalars.out.js --mode=node
+   ```
+4. Аналогично для `.js -> .pjs`:
+   ```powershell
+   node .\bin\pythonscript build test\js\test_scalars.js -o dist\test_scalars_js.out.pjs
+   type .\dist\test_scalars_js.out.pjs
    ```
 
-   - При первом запуске возможно, что папки `dist` не существует. Создайте её, если нужно:
-     ```powershell
-     mkdir dist
-     ```
-   - Если всё успешно, в `dist\test_scalars.out.js` появится сгенерированный JS-код.
+## Примеры работы
 
-2. **Запуск** полученного `.js`:
+- **`test_scalars.pjs`**: простые операции, try/except/finally.  
+  - Транспилируется в JS-код, при запуске выводит базовые арифметические результаты.  
+- **`test_complex.pjs`**: циклы, условия, комментарии.  
+  - Проверяет `if/else`, `for`, `while`.  
+- **`test_files.pjs`**: проверяет чтение/запись файлов (в node-режиме).  
+- **`test_imports.pjs`**: простая проверка импорта.
 
-   ```powershell
-   node .\bin\pythonscript run .\dist\test_scalars.out.js --mode=node
-   ```
-   - Скрипт прочитает `.js` файл, определит, что это JavaScript, и выполнит `executeNode(jsCode)`, то есть фактически запустит его в Node-среде.  
-   - Если всё ок, увидите вывод (`console.log(...)`) от кода, который был в `test_scalars.pjs`.
+## Запуск тестов
 
-**Пример** в командной строке PowerShell:
+Если в `test/runner.test.js` реализован тест-раннер (Mocha, Jest или любой другой):
 
-```powershell
-PS C:\myProjects\pythonscript> node .\bin\pythonscript build .\test\pjs\test_scalars.pjs -o .\dist\test_scalars.out.js
-Файл успешно транспилирован: .\test\pjs\test_scalars.pjs -> .\dist\test_scalars.out.js
+```bash
+npm run test
+```
 
-PS C:\myProjects\pythonscript> node .\bin\pythonscript run .\dist\test_scalars.out.js --mode=node
+Внутри `runner.test.js` можно автоматически вызывать:
+1. `build(...)` для `.pjs` -> `.js`.  
+2. `run(...)` для проверки, что код запускается в node-среде без ошибок и даёт корректный вывод.  
+3. Аналогично для `.js` -> `.pjs`.
+
+Если всё **выполняется без ошибок**, считается, что тесты пройдены успешно.
+
+---
+
+### Краткая демонстрация
+
+```bash
+$ node ./bin/pythonscript build test/pjs/test_scalars.pjs -o dist/scalars.js
+Файл успешно транспилирован!
+
+$ node ./bin/pythonscript run dist/scalars.js --mode=node
 13
 7
 30
 3.3333...
 3 1
 Done!
+# ...
 ```
+(Вывод совпадает с ожидаемым для `test_scalars.pjs`.)
 
-> Если вывод совпал с ожидаемым (например, 13, 7, 30...), значит всё работает.
-
----
-
-#### 2. Аналогично для `.js` -> `.pjs`
-
-Попробуйте транспилировать JavaScript-файл из папки `test\js`. Предположим, `test_scalars.js`:
-
-```powershell
-node .\bin\pythonscript build .\test\js\test_scalars.js -o .\dist\test_scalars_js.out.pjs
-```
-
-Проверить содержимое (можно вывести на экран или открыть любым текстовым редактором):
-
-```powershell
-type .\dist\test_scalars_js.out.pjs
-```
-
-Будет что-то вроде Python-кода (упрощённого, в зависимости от того, что вы реализовали в транспилере).
-
----
-
-#### 3. Запуск тест-раннера
-
-Если в `package.json` есть скрипт `"test": "node test/runner.test.js"` и файл `test\runner.test.js` реально существует и умеет вызывать `build`, `run` и проверять результаты, то в PowerShell:
-
-```powershell
-npm run test
-```
-
-В зависимости от реализации в `runner.test.js`, вы увидите логи по тестам, успешное или неуспешное завершение.
+Таким образом, **PythonScript** позволяет быстро проверить логику парсинга и трансформации простого Python-кода в JS-код и обратно.
