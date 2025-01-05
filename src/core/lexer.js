@@ -256,7 +256,6 @@ export function tokenizeJavaScript(code, fileName = "<anonymous>") {
   return tokens;
 }
 
-
 /**
  * Упрощённый лексер для Python-файла (.pjs).
  * Проходит по коду посимвольно, формирует токены.
@@ -324,6 +323,26 @@ export function tokenizePython(code, fileName = "<anonymous>") {
         ch = currentChar();
       }
       continue; // пропустили комментарий
+    }
+
+    // Проверка на f-string: f"..." или f'...'
+    if (ch === "f" && (code[pos + 1] === '"' || code[pos + 1] === "'")) {
+      const quote = code[pos + 1]; // '"' или "'"
+      advance(2); // пропускаем 'f' + саму кавычку
+
+      let strVal = "";
+      while (pos < code.length && currentChar() !== quote) {
+        strVal += currentChar();
+        advance();
+      }
+      if (currentChar() !== quote) {
+        throw new PScriptError("Не закрытая f-строка", fileName, line, col);
+      }
+      advance(); // пропустить закрывающую кавычку
+
+      // Важный момент: в отличие от обычных строк, мы не добавляем type="STRING", а что-то вроде "FSTRING"
+      addToken("FSTRING", strVal);
+      continue;
     }
 
     // Строка (упрощённая версия: без экранирования)
