@@ -461,6 +461,31 @@ function parseDictLiteral(stream) {
   return new ASTNode("DictLiteral", { pairs });
 }
 
+function parseAssignment(stream) {
+  // Разбираем "левое" выражение (которое может быть self.name, arr[0], просто x, и т.д.)
+  let left = parseMembership(stream);  // или parseExpr, parseMembership — на ваше усмотрение
+
+  // Если следующий токен — "=", значит это присваивание
+  const cur = stream.current();
+  if (cur && cur.type === "OP" && cur.value === "=") {
+    const eqToken = cur;
+    stream.next(); // пропускаем "="
+
+    // Правую часть тоже разбираем как присваивание, чтобы поддерживать цепочки: x = y = 123
+    let right = parseAssignment(stream);
+
+    return new ASTNode("AssignStatement", {
+      left,
+      right,
+      loc: { line: eqToken.line, col: eqToken.col },
+    });
+  }
+
+  // иначе это не присваивание, а просто выражение
+  return left;
+}
+
+
 /**
  * Простейшая обёртка для итерации по массиву токенов.
  */
@@ -882,6 +907,8 @@ function parsePythonExpression(stream) {
     return new ASTNode("PrintStatement", { args });
   }
 
+  return parseAssignment(stream);
+  
   // Проверим присваивание: <IDENTIFIER> = <expression>
   if (
     token.type === "IDENTIFIER" &&
