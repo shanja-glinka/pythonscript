@@ -1,0 +1,9 @@
+# Предположим, у нас есть файл mylib.pjs с простой функцией
+
+import mylib  # Тестируем import
+
+print(mylib.hello_world())
+
+# Проверка из другого файла (или другого способа импорта)
+from mylib import sum_two
+print(sum_two(2, 3))

@@ -1,0 +1,60 @@
+#!/usr/bin/env node
+
+import { Command } from 'commander';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { build, run } from '../src/index.js';  // <-- ваш код транспиляции
+
+// Нужен для вычисления dirname (если используете ESM):
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Создаём главный объект Commander:
+const program = new Command();
+
+// Указываем общую информацию:
+program
+  .name('pythonscript')
+  .description('CLI for PythonScript transpiler')
+  .version('1.0.0');
+
+// Определяем команду "build":
+program
+  .command('build <inputFile>')                     // имя + обязательный аргумент
+  .description('Транспилировать .pjs -> .js или .js -> .pjs')
+  .option('-o, --output <outputFile>', 'Путь к выходному файлу')
+  .action(async (inputFile, options) => {
+    // Здесь ваша логика build
+    if (!options.output) {
+      console.error("Ошибка: укажите --output или -o для выходного файла");
+      process.exit(1);
+    }
+    try {
+      await build(inputFile, options.output);        // вызываем вашу функцию из ../src/index.js
+      console.log(`Успешно: ${inputFile} -> ${options.output}`);
+    } catch (err) {
+      console.error("Ошибка при сборке:", err);
+      process.exit(1);
+    }
+  });
+
+// Определяем команду "run":
+program
+  .command('run <inputFile>')
+  .description('Выполнить код напрямую (node-режим или browser-режим)')
+  .option('--mode <mode>', 'node | browser', 'node')
+  .action(async (inputFile, options) => {
+    // Здесь ваша логика run
+    try {
+      await run(inputFile, { mode: options.mode });
+      console.log("Выполнение завершено");
+    } catch (err) {
+      console.error("Ошибка при выполнении:", err);
+      process.exit(1);
+    }
+  });
+
+// Если вы хотите “help” по умолчанию:
+program.showHelpAfterError();
+
+program.parse(process.argv);

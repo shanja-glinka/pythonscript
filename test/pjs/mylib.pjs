@@ -1,0 +1,7 @@
+# Простейшая "библиотека"
+
+def hello_world():
+    return "Hello from mylib!"
+
+def sum_two(a, b):
+    return a + b
