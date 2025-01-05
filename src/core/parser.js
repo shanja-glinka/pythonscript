@@ -36,6 +36,26 @@ function parseExpr(stream) {
   return left;
 }
 
+function parseComparison(stream) {
+  // Предположим, parseExpr обрабатывает +, -, *, /, ...
+  let left = parseExpr(stream);
+  while (true) {
+    const cur = stream.current();
+    if (!cur || cur.type !== "OP") break;
+
+    // Список операторов сравнения
+    if (["<", ">", "<=", ">=", "==", "!="].includes(cur.value)) {
+      const op = cur.value;
+      stream.next(); // пропускаем оператор
+      const right = parseExpr(stream);
+      left = new ASTNode("BinOp", { op, left, right });
+    } else {
+      break;
+    }
+  }
+  return left;
+}
+
 // parseTerm разберёт умножение, деление, //, %
 function parseTerm(stream) {
   // обрабатывает * / // %
@@ -55,6 +75,40 @@ function parseTerm(stream) {
   return left;
 }
 
+function parseListLiteral(stream) {
+  // Предполагаем, что текущий токен — это '['
+  stream.next(); // пропускаем '['
+
+  const elements = [];
+
+  // Читаем элементы (выражения), разделённые запятыми, до ']'
+  while (
+    stream.current() &&
+    !(stream.current().type === "OP" && stream.current().value === "]")
+  ) {
+    // Каждый элемент — полноценное выражение, например parseComparison или parseExpr
+    const elem = parseExpr(stream);
+    elements.push(elem);
+
+    // Если видим ',', пропускаем
+    if (
+      stream.current() &&
+      stream.current().type === "OP" &&
+      stream.current().value === ","
+    ) {
+      stream.next(); // пропускаем запятую
+    } else {
+      break;
+    }
+  }
+
+  // Ожидаем закрывающую ']'
+  stream.expect("OP", "]");
+
+  // Создаём AST-узел, например "ListLiteral"
+  return new ASTNode("ListLiteral", { elements });
+}
+
 // parseFactor парсит числа, идентификаторы, скобки (…)
 function parseFactor(stream) {
   // обрабатывает числа, идентификаторы, ( expr ), унарный минус и т.д.
@@ -67,6 +121,7 @@ function parseFactor(stream) {
       0
     );
   }
+
   // ( expr ) ?
   if (token.type === "OP" && token.value === "(") {
     stream.next();
@@ -82,21 +137,49 @@ function parseFactor(stream) {
     stream.next(); // пропускаем ')'
     return expr;
   }
+
   // NUMBER ?
   if (token.type === "NUMBER") {
     stream.next();
     return new ASTNode("NumberLiteral", { value: token.value });
   }
+
   // STRING ?
   if (token.type === "STRING") {
     stream.next();
     return new ASTNode("StringLiteral", { value: token.value });
   }
+
   // IDENTIFIER ?
   if (token.type === "IDENTIFIER") {
     stream.next();
-    return new ASTNode("Variable", { name: token.value });
+    let node = new ASTNode("Variable", { name: token.value });
+    // Проверим, нет ли после идентификатора конструкции [ ... ]
+    while (
+      stream.current() &&
+      stream.current().type === "OP" &&
+      stream.current().value === "["
+    ) {
+      stream.next(); // пропускаем '['
+      const indexExpr = parseExpr(stream);
+      stream.expect("OP", "]");
+      // Заворачиваем в ASTNode("IndexAccess", { object: node, index: indexExpr })
+      node = new ASTNode("IndexAccess", {
+        object: node,
+        index: indexExpr,
+      });
+    }
+
+    return node;
   }
+
+  
+
+  // [ expr ]
+  if (token.type === "OP" && token.value === "[") {
+    return parseListLiteral(stream);
+  }
+  
   // Если хотим поддержать унарный минус:  -(expr)
   // if (token.type === "OP" && token.value === '-') { ... }
 
@@ -317,7 +400,7 @@ function parsePythonFunction(stream) {
 function parsePythonIf(stream) {
   // if <expr>: <statements> [elif <expr>: <statements>] [else: <statements>]
   const start = stream.expect("KEYWORD", "if");
-  const condition = parsePythonExpression(stream);
+  const condition = parseComparison(stream);
   stream.expect("OP", ":");
   const ifBody = [];
   while (
