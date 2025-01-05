@@ -463,7 +463,7 @@ function parseDictLiteral(stream) {
 
 function parseAssignment(stream) {
   // Разбираем "левое" выражение (которое может быть self.name, arr[0], просто x, и т.д.)
-  let left = parseMembership(stream);  // или parseExpr, parseMembership — на ваше усмотрение
+  let left = parseMembership(stream); // или parseExpr, parseMembership — на ваше усмотрение
 
   // Если следующий токен — "=", значит это присваивание
   const cur = stream.current();
@@ -484,7 +484,6 @@ function parseAssignment(stream) {
   // иначе это не присваивание, а просто выражение
   return left;
 }
-
 
 /**
  * Простейшая обёртка для итерации по массиву токенов.
@@ -650,6 +649,7 @@ function parsePythonClass(stream) {
   ) {
     body.push(parsePythonStatement(stream));
   }
+
   return new ASTNode("ClassDef", {
     name: className.value,
     body,
@@ -908,48 +908,6 @@ function parsePythonExpression(stream) {
   }
 
   return parseAssignment(stream);
-  
-  // Проверим присваивание: <IDENTIFIER> = <expression>
-  if (
-    token.type === "IDENTIFIER" &&
-    stream.peek(1) &&
-    stream.peek(1).type === "OP" &&
-    stream.peek(1).value === "="
-  ) {
-    const ident = token.value;
-    stream.next(); // skip operand
-    const eqToken = stream.next(); // пропускаем '='
-    const right = parsePythonExpression(stream);
-    return new ASTNode("AssignStatement", {
-      left: ident,
-      right,
-      loc: { line: eqToken.line, col: eqToken.col },
-    });
-  }
-
-  return parseMembership(stream);
-
-  // Если это строка, число или идентификатор — вернем литерал (или Variable)
-  if (token.type === "STRING") {
-    stream.next();
-    return new ASTNode("StringLiteral", { value: token.value });
-  }
-  if (token.type === "NUMBER") {
-    stream.next();
-    return new ASTNode("NumberLiteral", { value: token.value });
-  }
-  if (token.type === "IDENTIFIER") {
-    stream.next();
-    return new ASTNode("Variable", { name: token.value });
-  }
-
-  // Иначе — ошибка
-  throw new PScriptError(
-    `Неожиданное начало выражения: ${token.type} ${token.value}`,
-    stream.fileName,
-    token.line,
-    token.col
-  );
 }
 
 /* =========================================

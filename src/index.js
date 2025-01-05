@@ -48,7 +48,7 @@ export async function build(inputFile, outputFile) {
 
     console.log("Транспиляция завершена успешно.");
   } catch (error) {
-    throw new Error(`Ошибка в build: ${error.message}`);
+    throw error;
   }
 }
 
@@ -81,6 +81,6 @@ export async function run(inputFile, { mode = "node" } = {}) {
 
     console.log("Выполнение завершено успешно.");
   } catch (error) {
-    throw new Error(`Ошибка в run: ${error.message}`);
+    throw error;
   }
 }
