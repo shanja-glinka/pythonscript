@@ -33,7 +33,8 @@ program
       await build(inputFile, options.output);        // вызываем вашу функцию из ../src/index.js
       console.log(`Успешно: ${inputFile} -> ${options.output}`);
     } catch (err) {
-      console.error("Ошибка при сборке:", err);
+      console.error("Ошибка при сборке:");
+      console.log(err);
       process.exit(1);
     }
   });

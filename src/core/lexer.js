@@ -257,11 +257,11 @@ export function tokenizeJavaScript(code, fileName = "<anonymous>") {
 }
 
 /**
- * Упрощённый лексер для Python-файла (.pjs).
+ * Лексер для Python-файла (.pjs).
  * Проходит по коду посимвольно, формирует токены.
- * @param {string} code     - исходный код (содержимое файла .pjs)
- * @param {string} fileName - имя файла (для ошибок)
- * @returns {Token[]}       - массив токенов
+ * @param {string} code      - исходный код (содержимое файла .pjs)
+ * @param {string} fileName  - имя файла (для ошибок)
+ * @returns {Token[]}        - массив токенов
  */
 export function tokenizePython(code, fileName = "<anonymous>") {
   let pos = 0;
@@ -293,7 +293,7 @@ export function tokenizePython(code, fileName = "<anonymous>") {
   }
 
   /**
-   * Вспомогательная функция: добавить токен в массив.
+   * Добавляет токен в массив.
    */
   function addToken(type, value) {
     tokens.push(new Token(type, value, line, col));
@@ -332,27 +332,46 @@ export function tokenizePython(code, fileName = "<anonymous>") {
 
       let strVal = "";
       while (pos < code.length && currentChar() !== quote) {
-        strVal += currentChar();
-        advance();
+        if (currentChar() === "\\") {
+          // Обработка экранирования
+          strVal += currentChar();
+          advance();
+          if (currentChar() !== "\0") {
+            strVal += currentChar();
+            advance();
+          }
+        } else {
+          strVal += currentChar();
+          advance();
+        }
       }
       if (currentChar() !== quote) {
         throw new PScriptError("Не закрытая f-строка", fileName, line, col);
       }
       advance(); // пропустить закрывающую кавычку
 
-      // Важный момент: в отличие от обычных строк, мы не добавляем type="STRING", а что-то вроде "FSTRING"
       addToken("FSTRING", strVal);
       continue;
     }
 
-    // Строка (упрощённая версия: без экранирования)
+    // Строка (одинарные или двойные кавычки)
     if (ch === '"' || ch === "'") {
       const quote = ch;
       let strVal = "";
       advance(); // пропускаем открытую кавычку
       while (pos < code.length && currentChar() !== quote) {
-        strVal += currentChar();
-        advance();
+        if (currentChar() === "\\") {
+          // Обработка экранирования
+          strVal += currentChar();
+          advance();
+          if (currentChar() !== "\0") {
+            strVal += currentChar();
+            advance();
+          }
+        } else {
+          strVal += currentChar();
+          advance();
+        }
       }
       if (currentChar() !== quote) {
         throw new PScriptError("Не закрытая строка", fileName, line, col);
