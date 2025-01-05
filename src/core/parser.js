@@ -3,55 +3,49 @@ import { PScriptError } from "./errors.js";
 
 //
 function parsePower(stream) {
-  // Сперва парсим базовый элемент (число, идентификатор, скобки и т.п.)
+  // обрабатывает возведение в степень (**)
   let base = parseFactor(stream);
-
-  // Пока текущий токен — оператор `**`, обрабатываем возведение в степень
   while (
     stream.current() &&
     stream.current().type === "OP" &&
     stream.current().value === "**"
   ) {
-    const op = stream.current().value; // '**'
-    stream.next(); // пропускаем '**'
-
-    // Возведение в степень — правосторонняя ассоциативность
-    // поэтому правый операнд тоже парсим как parsePower, а не просто parseFactor
-    const exponent = parsePower(stream);
-
-    // Строим узел BinOp
-    base = new ASTNode("BinOp", { op, left: base, right: exponent });
+    stream.next(); // пропускаем **
+    const exponent = parsePower(stream); // правоассоциативность
+    base = new ASTNode("BinOp", { op: "**", left: base, right: exponent });
   }
-
   return base;
 }
 
 // parseExpr разберёт суммы и разности
 function parseExpr(stream) {
+  // обрабатывает + и -
   let left = parseTerm(stream);
-  while (
-    stream.current() &&
-    stream.current().type === "OP" &&
-    (stream.current().value === "+" || stream.current().value === "-")
-  ) {
-    const opToken = stream.current();
-    stream.next(); // пропускаем + или -
-    const right = parseTerm(stream);
-    left = new ASTNode("BinOp", { op: opToken.value, left, right });
+  while (true) {
+    const cur = stream.current();
+    if (!cur || cur.type !== "OP") break;
+    if (cur.value === "+" || cur.value === "-") {
+      const op = cur.value;
+      stream.next();
+      const right = parseTerm(stream);
+      left = new ASTNode("BinOp", { op, left, right });
+    } else {
+      break;
+    }
   }
   return left;
 }
 
 // parseTerm разберёт умножение, деление, //, %
 function parseTerm(stream) {
+  // обрабатывает * / // %
   let left = parsePower(stream);
   while (true) {
     const cur = stream.current();
     if (!cur || cur.type !== "OP") break;
-
     if (["*", "/", "//", "%"].includes(cur.value)) {
       const op = cur.value;
-      stream.next(); // пропускаем оператор
+      stream.next();
       const right = parsePower(stream);
       left = new ASTNode("BinOp", { op, left, right });
     } else {
@@ -63,6 +57,7 @@ function parseTerm(stream) {
 
 // parseFactor парсит числа, идентификаторы, скобки (…)
 function parseFactor(stream) {
+  // обрабатывает числа, идентификаторы, ( expr ), унарный минус и т.д.
   const token = stream.current();
   if (!token) {
     throw new PScriptError(
@@ -72,45 +67,41 @@ function parseFactor(stream) {
       0
     );
   }
-
-  // (expr) -> обрабатываем скобки
+  // ( expr ) ?
   if (token.type === "OP" && token.value === "(") {
-    stream.next(); // пропускаем '('
+    stream.next();
     const expr = parseExpr(stream);
-    // ожидаем закрывающую ')'
     if (!stream.current() || stream.current().value !== ")") {
       throw new PScriptError(
-        "Ожидалась закрывающая скобка ')'",
+        "Ожидалась ')'",
         stream.fileName,
         token.line,
         token.col
       );
     }
-    stream.next(); // пропустить ')'
+    stream.next(); // пропускаем ')'
     return expr;
   }
-
-  // NUMBER
+  // NUMBER ?
   if (token.type === "NUMBER") {
     stream.next();
     return new ASTNode("NumberLiteral", { value: token.value });
   }
-
-  // STRING
+  // STRING ?
   if (token.type === "STRING") {
     stream.next();
     return new ASTNode("StringLiteral", { value: token.value });
   }
-
-  // IDENTIFIER
+  // IDENTIFIER ?
   if (token.type === "IDENTIFIER") {
     stream.next();
-    // возможно, тут ещё обработка вызова функции?
     return new ASTNode("Variable", { name: token.value });
   }
+  // Если хотим поддержать унарный минус:  -(expr)
+  // if (token.type === "OP" && token.value === '-') { ... }
 
   throw new PScriptError(
-    `Непонятный фактор в выражении: ${token.value}`,
+    `Непонятный фактор: ${token.type} ${token.value}`,
     stream.fileName,
     token.line,
     token.col
@@ -546,7 +537,7 @@ function parsePythonExpression(stream) {
     stream.peek(1).value === "="
   ) {
     const ident = token.value;
-    stream.next();
+    stream.next(); // skip operand
     const eqToken = stream.next(); // пропускаем '='
     const right = parsePythonExpression(stream);
     return new ASTNode("AssignStatement", {
@@ -555,6 +546,8 @@ function parsePythonExpression(stream) {
       loc: { line: eqToken.line, col: eqToken.col },
     });
   }
+
+  return parseExpr(stream);
 
   // Если это строка, число или идентификатор — вернем литерал (или Variable)
   if (token.type === "STRING") {
