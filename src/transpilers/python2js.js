@@ -129,6 +129,18 @@ export function pythonASTtoJS(ast) {
         )})`;
       }
 
+    case "ListLiteral": {
+      // Превратить каждый элемент в JS-код
+      const jsElems = ast.elements.map((e) => pythonASTtoJS(e));
+      return `[${jsElems.join(", ")}]`;
+    }
+
+    case "IndexAccess": {
+      const objJS = pythonASTtoJS(ast.object);
+      const idxJS = pythonASTtoJS(ast.index);
+      return `${objJS}[${idxJS}]`;
+    }
+
     default:
       // Если не знаем, вернём пустую строку или комментарий
       return `/* Unhandled Python AST node: ${ast.type} */`;
