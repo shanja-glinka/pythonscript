@@ -2,11 +2,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { tokenizePython, tokenizeJavaScript } from "./core/lexer.js";
-import { parsePythonTokens, parseJavaScriptTokens } from "./core/parser.js";
 import { pythonASTtoJS } from "./transpilers/python2js.js";
 import { jsASTtoPython } from "./transpilers/js2python.js";
 import { executeJS as executeBrowser } from "./runtime/browser.js";
 import { executeJS as executeNode } from "./runtime/node.js";
+import { parseJavaScriptTokens } from "./core/parsers/jsparser.js";
+import { parsePythonTokens } from "./core/parser.js";
 
 /**
  * Функция для транспиляции PythonScript
