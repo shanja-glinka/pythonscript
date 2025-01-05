@@ -1,7 +1,7 @@
-import { ASTNode } from "./ast.js";
-import { PScriptError } from "./errors.js";
+import { ASTNode } from "../ast.js";
+import { PScriptError } from "../errors.js";
 import { tokenizePython } from "./lexer.js";
-import { TokenStream } from "./token-stream.js";
+import { TokenStream } from "../token-stream.js";
 
 /* =========================================
       ПАРСЕР P Y T H O N
