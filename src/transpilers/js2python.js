@@ -14,8 +14,9 @@ export function jsASTtoPython(ast) {
       return `class ${ast.name}:\n    pass\n`;
 
     case "FunctionDeclaration":
-      // function foo(...) { ... } -> def foo(...):
-      return `def ${ast.name}():\n    pass\n`;
+      const params = ast.params.join(", ");
+      const body = ast.body.map((stmt) => jsASTtoPython(stmt)).join("\n    ");
+      return `def ${ast.name}(${params}):\n    ${body || "pass"}\n`;
 
     case "IfStatement":
       return `if True:\n    pass\n  # Упрощённый if\n`;
@@ -41,6 +42,12 @@ export function jsASTtoPython(ast) {
 
     case "Identifier":
       return `${ast.name}`;
+
+    case "TEMPLATE_STRING":
+      // Преобразование шаблонной строки в f-строку Python
+      // Предполагается, что внутри strVal могут быть выражения вида ${expr}
+      const pythonFString = ast.value.replace(/\$\{([^}]+)\}/g, "${$1}");
+      return `f"${pythonFString}"`;
 
     default:
       return `# Unhandled JS AST node: ${ast.type}`;

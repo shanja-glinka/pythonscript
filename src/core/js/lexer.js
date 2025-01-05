@@ -27,7 +27,7 @@ const KEYWORDS_JS = new Set([
   "console",
 ]);
 
-const SINGLE_OPS = new Set([
+const singleOps = new Set([
   "+",
   "-",
   "*",
@@ -42,21 +42,15 @@ const SINGLE_OPS = new Set([
   "]",
   "{",
   "}",
-  ":",
   ",",
   ".",
-  "**",
-  "//",
-  "==",
-  "!=",
-  "<=",
-  ">=",
+  ";",
+  "!",
+  ":",
+  "?",
 ]);
-export function tokenizeJavaScript(code, fileName = "<anonymous>") {
-  // Здесь для демонстрации — сделаем "похожий" лексер,
 
-  // Можно было бы сделать общий код и переиспользовать,
-  // но ради наглядности здесь скопируем логику
+export function tokenizeJavaScript(code, fileName = "<anonymous>") {
   let pos = 0;
   let line = 1;
   let col = 1;
@@ -85,16 +79,18 @@ export function tokenizeJavaScript(code, fileName = "<anonymous>") {
   while (pos < code.length) {
     let ch = currentChar();
 
-    // Пробелы, табы
+    // Пробелы, табы, возвраты каретки
     if (ch === " " || ch === "\t" || ch === "\r") {
       advance();
       continue;
     }
+
     // Перенос строки
     if (ch === "\n") {
       advance();
       continue;
     }
+
     // Комментарии: // и /* ... */
     if (ch === "/" && code[pos + 1] === "/") {
       while (ch && ch !== "\n") {
@@ -120,19 +116,98 @@ export function tokenizeJavaScript(code, fileName = "<anonymous>") {
       continue;
     }
 
-    // Строки (одинарные, двойные, без экранирования для упрощения)
+    // Шаблонные строки (template literals) с обратными кавычками
+    if (ch === "`") {
+      let strVal = "";
+      advance(); // Пропускаем открывающую обратную кавычку
+      while (pos < code.length && currentChar() !== "`") {
+        if (currentChar() === "\\") {
+          // Обработка экранирования
+          advance();
+          const escapeChar = currentChar();
+          switch (escapeChar) {
+            case "n":
+              strVal += "\n";
+              break;
+            case "t":
+              strVal += "\t";
+              break;
+            case "\\":
+              strVal += "\\";
+              break;
+            case "`":
+              strVal += "`";
+              break;
+            case "$":
+              strVal += "$";
+              break;
+            default:
+              strVal += escapeChar;
+          }
+          advance();
+        } else if (currentChar() === "$" && code[pos + 1] === "{") {
+          // Обработка выражений внутри шаблонных строк
+          strVal += "${";
+          advance(2); // пропускаем "${"
+          // Для упрощения, добавим как часть строки
+          // Более сложная обработка потребует вложенного парсера
+        } else {
+          strVal += currentChar();
+          advance();
+        }
+      }
+      if (currentChar() !== "`") {
+        throw new PScriptError(
+          "Не закрытая шаблонная строка",
+          fileName,
+          line,
+          col
+        );
+      }
+      advance(); // Пропускаем закрывающую обратную кавычку
+      addToken("TEMPLATE_STRING", strVal);
+      continue;
+    }
+
+    // Строки (одинарные, двойные)
     if (ch === '"' || ch === "'") {
       const quote = ch;
       let strVal = "";
-      advance();
+      advance(); // Пропускаем открывающую кавычку
       while (pos < code.length && currentChar() !== quote) {
-        strVal += currentChar();
-        advance();
+        if (currentChar() === "\\") {
+          // Обработка экранирования
+          advance();
+          const escapeChar = currentChar();
+          switch (escapeChar) {
+            case "n":
+              strVal += "\n";
+              break;
+            case "t":
+              strVal += "\t";
+              break;
+            case "\\":
+              strVal += "\\";
+              break;
+            case '"':
+              strVal += '"';
+              break;
+            case "'":
+              strVal += "'";
+              break;
+            default:
+              strVal += escapeChar;
+          }
+          advance();
+        } else {
+          strVal += currentChar();
+          advance();
+        }
       }
       if (currentChar() !== quote) {
-        throw new PScriptError("Не закрытая строка", fileName, line, col);
+        throw new PScriptError(`Не закрытая строка`, fileName, line, col);
       }
-      advance(); // пропустить кавычку
+      advance(); // Пропускаем закрывающую кавычку
       addToken("STRING", strVal);
       continue;
     }
@@ -170,9 +245,7 @@ export function tokenizeJavaScript(code, fileName = "<anonymous>") {
     }
 
     // Операторы
-    // =, ==, ===, =>, <=, >=, !=, !==, ++, --, +, -, ...
-    // Здесь можно долго перечислять. Для примера:
-    // Проверим => (стрелочные функции)
+    // =>, ===, ==, !==, !=, <=, >=
     if (ch === "=" && code[pos + 1] === ">") {
       addToken("OP", "=>");
       advance(2);
@@ -209,35 +282,15 @@ export function tokenizeJavaScript(code, fileName = "<anonymous>") {
       continue;
     }
 
-    // Односимвольные
-    const singleOps = new Set([
-      "+",
-      "-",
-      "*",
-      "/",
-      "%",
-      "=",
-      "<",
-      ">",
-      "(",
-      ")",
-      "[",
-      "]",
-      "{",
-      "}",
-      ",",
-      ".",
-      ";",
-      "!",
-      ":",
-      "?",
-    ]);
+    // Односимвольные операторы
     if (singleOps.has(ch)) {
       addToken("OP", ch);
       advance();
       continue;
+    } else {
     }
 
+    // Если символ не распознан
     throw new PScriptError(`Неизвестный символ '${ch}'`, fileName, line, col);
   }
 

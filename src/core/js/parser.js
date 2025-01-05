@@ -70,24 +70,42 @@ function parseJSImport(stream) {
 }
 
 function parseJSFunction(stream) {
-  // function <IDENTIFIER>(...) { ... }
-  const start = stream.expect("KEYWORD", "function");
-  const funcName = stream.expect("IDENTIFIER");
+  stream.expect("KEYWORD", "function");
+  const nameToken = stream.expect("IDENTIFIER");
+  const name = nameToken.value;
+
   stream.expect("OP", "(");
-  // упрощенно — без аргументов
+
+  const params = [];
+  // Проверяем, есть ли параметры
+  if (!(stream.current().type === "OP" && stream.current().value === ")")) {
+    while (true) {
+      const paramToken = stream.expect("IDENTIFIER");
+      params.push(paramToken.value);
+
+      if (stream.current().type === "OP" && stream.current().value === ",") {
+        stream.next(); // Пропускаем запятую и продолжаем
+        continue;
+      }
+      break;
+    }
+  }
   stream.expect("OP", ")");
+
   stream.expect("OP", "{");
-  // упрощенно — пустое тело
-  while (stream.current() && !(stream.current().value === "}")) {
-    // ... парсим вложенные инструкции
-    break; // для краткости сейчас пропустим
+
+  const body = [];
+  while (!(stream.current().type === "OP" && stream.current().value === "}")) {
+    body.push(parseJSStatement(stream));
   }
   stream.expect("OP", "}");
-  return new ASTNode("FunctionDeclaration", {
-    name: funcName.value,
-    body: [],
-    loc: { line: start.line, col: start.col },
-  });
+
+  return {
+    type: "FunctionDeclaration",
+    name,
+    params,
+    body,
+  };
 }
 
 function parseJSClass(stream) {
