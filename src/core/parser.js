@@ -3,6 +3,33 @@ import { PScriptError } from "./errors.js";
 import { tokenizePython } from "./lexer.js";
 import { TokenStream } from "./token-stream.js";
 
+/* =========================================
+      ПАРСЕР P Y T H O N
+   ========================================= */
+
+/**
+ * Ожидает один или несколько токенов NEWLINE, затем INDENT.
+ * @param {TokenStream} stream - Текущий поток токенов.
+ */
+function expectNewlineAndIndent(stream) {
+  stream.expect("NEWLINE");
+  // Пропускаем дополнительные NEWLINE токены (например, пустые строки)
+  while (stream.current() && stream.current().type === "NEWLINE") {
+    stream.next();
+  }
+  stream.expect("INDENT");
+}
+
+/**
+ * Пропускает все подряд идущие токены NEWLINE.
+ * @param {TokenStream} stream - Текущий поток токенов.
+ */
+function skipNewlines(stream) {
+  while (stream.current() && stream.current().type === "NEWLINE") {
+    stream.next();
+  }
+}
+
 //
 function parsePower(stream) {
   // обрабатывает возведение в степень (**)
@@ -198,6 +225,16 @@ function parseAtom(stream) {
       stream.fileName,
       0,
       0
+    );
+  }
+
+  // Проверяем, не является ли текущий токен INDENT или DEDENT
+  if (token.type === "INDENT" || token.type === "DEDENT") {
+    throw new PScriptError(
+      `Непредвиденный ${token.type}`,
+      stream.fileName,
+      token.line,
+      token.col
     );
   }
 
@@ -486,15 +523,18 @@ function parseAssignment(stream) {
   return left;
 }
 
-/* =========================================
-      ПАРСЕР P Y T H O N
-   ========================================= */
-
 export function parsePythonTokens(tokens, fileName = "<anonymous>") {
   const stream = new TokenStream(tokens, fileName);
   const body = [];
 
   while (stream.current()) {
+    // Пропускаем лишние NEWLINE токены
+    while (stream.current() && stream.current().type === "NEWLINE") {
+      stream.next();
+    }
+
+    if (stream.isAtEnd()) break;
+
     body.push(parsePythonStatement(stream));
   }
 
@@ -586,20 +626,19 @@ function parsePythonFromImport(stream) {
 function parsePythonClass(stream) {
   const start = stream.expect("KEYWORD", "class");
   const className = stream.expect("IDENTIFIER");
-  // упрощённо: не обрабатываем ( ... ) для наследования
-  // ждём двоеточие
+  // Упрощённо: не обрабатываем наследование (например, class Person(Base): ...)
   stream.expect("OP", ":");
-  // в реальном Python тут пошёл бы блок с отступами
-  // Упростим: считаем, что до следующего ключевого слова — тело класса
-  // Для демонстрации: делаем вид, что тело класса — просто список инструкций
+
+  expectNewlineAndIndent(stream);
+
   const body = [];
-  while (
-    stream.current() &&
-    stream.current().type !== "KEYWORD" &&
-    stream.current().type !== null
-  ) {
-    body.push(parsePythonStatement(stream));
+  while (stream.current() && stream.current().type !== "DEDENT") {
+    skipNewlines(stream); // Пропускаем любые NEWLINE перед инструкцией
+    if (stream.current() && stream.current().type !== "DEDENT") {
+      body.push(parsePythonStatement(stream));
+    }
   }
+  stream.expect("DEDENT"); // Завершение блока класса
 
   return new ASTNode("ClassDef", {
     name: className.value,
@@ -612,29 +651,39 @@ function parsePythonFunction(stream) {
   const start = stream.expect("KEYWORD", "def");
   const funcName = stream.expect("IDENTIFIER");
   stream.expect("OP", "(");
-  // парсим аргументы (упростим)
+
+  // Парсинг аргументов (упрощённо)
   const args = [];
   if (stream.current() && stream.current().type === "IDENTIFIER") {
     const firstArg = stream.current();
     stream.next();
-    args.push(firstArg.value);
+    if (firstArg.value !== "self") {
+      // исключаем 'self'
+      args.push(firstArg.value);
+    }
     while (stream.current() && stream.current().value === ",") {
       stream.next(); // пропускаем запятую
       const nxt = stream.expect("IDENTIFIER");
-      args.push(nxt.value);
+      if (nxt.value !== "self") {
+        // исключаем 'self'
+        args.push(nxt.value);
+      }
     }
   }
   stream.expect("OP", ")");
   stream.expect("OP", ":");
-  // тело функции
+
+  expectNewlineAndIndent(stream);
+
   const body = [];
-  while (
-    stream.current() &&
-    stream.current().type !== "KEYWORD" &&
-    stream.current().type !== null
-  ) {
-    body.push(parsePythonStatement(stream));
+  while (stream.current() && stream.current().type !== "DEDENT") {
+    skipNewlines(stream); // Пропускаем любые NEWLINE перед инструкцией
+    if (stream.current() && stream.current().type !== "DEDENT") {
+      body.push(parsePythonStatement(stream));
+    }
   }
+  stream.expect("DEDENT"); // Завершение блока функции
+
   return new ASTNode("FunctionDef", {
     name: funcName.value,
     args,
@@ -648,16 +697,26 @@ function parsePythonIf(stream) {
   const start = stream.expect("KEYWORD", "if");
   const condition = parseMembership(stream);
   stream.expect("OP", ":");
+
+  // Ожидаем NEWLINE и INDENT
+  expectNewlineAndIndent(stream);
+
   const ifBody = [];
   while (
     stream.current() &&
+    stream.current().type !== "DEDENT" &&
     !(
       stream.current().type === "KEYWORD" &&
       ["elif", "else"].includes(stream.current().value)
     )
   ) {
-    ifBody.push(parsePythonStatement(stream));
+    skipNewlines(stream); // Пропускаем любые NEWLINE перед инструкцией
+    if (stream.current() && stream.current().type !== "DEDENT") {
+      ifBody.push(parsePythonStatement(stream));
+    }
   }
+  stream.expect("DEDENT"); // Ожидаем завершение блока if
+
   const elifClauses = [];
   while (
     stream.current() &&
@@ -665,21 +724,32 @@ function parsePythonIf(stream) {
     stream.current().value === "elif"
   ) {
     stream.next(); // пропускаем 'elif'
-    const elifCond = parsePythonExpression(stream);
+    const elifCond = parseMembership(stream);
     stream.expect("OP", ":");
+
+    // Ожидаем NEWLINE и INDENT
+    expectNewlineAndIndent(stream);
+
     const elifBody = [];
     while (
       stream.current() &&
+      stream.current().type !== "DEDENT" &&
       !(
         stream.current().type === "KEYWORD" &&
         ["elif", "else"].includes(stream.current().value)
       )
     ) {
-      elifBody.push(parsePythonStatement(stream));
+      skipNewlines(stream); // Пропускаем любые NEWLINE перед инструкцией
+      if (stream.current() && stream.current().type !== "DEDENT") {
+        elifBody.push(parsePythonStatement(stream));
+      }
     }
+    stream.expect("DEDENT"); // Ожидаем завершение блока elif
+
     elifClauses.push({ condition: elifCond, body: elifBody });
   }
-  let elseBody = null;
+
+  let elseBody = [];
   if (
     stream.current() &&
     stream.current().type === "KEYWORD" &&
@@ -687,10 +757,17 @@ function parsePythonIf(stream) {
   ) {
     stream.next();
     stream.expect("OP", ":");
-    elseBody = [];
-    while (stream.current() && !(stream.current().type === "KEYWORD")) {
-      elseBody.push(parsePythonStatement(stream));
+
+    // Ожидаем NEWLINE и INDENT
+    expectNewlineAndIndent(stream);
+
+    while (stream.current() && stream.current().type !== "DEDENT") {
+      skipNewlines(stream); // Пропускаем любые NEWLINE перед инструкцией
+      if (stream.current() && stream.current().type !== "DEDENT") {
+        elseBody.push(parsePythonStatement(stream));
+      }
     }
+    stream.expect("DEDENT"); // Ожидаем завершение блока else
   }
 
   return new ASTNode("IfStatement", {
@@ -727,10 +804,19 @@ function parsePythonFor(stream) {
   }
   stream.expect("OP", ")");
   stream.expect("OP", ":");
+
+  // Ожидаем NEWLINE и INDENT
+  expectNewlineAndIndent(stream);
+
   const body = [];
-  while (stream.current() && stream.current().type !== "KEYWORD") {
-    body.push(parsePythonStatement(stream));
+  while (stream.current() && stream.current().type !== "DEDENT") {
+    skipNewlines(stream); // Пропускаем любые NEWLINE перед инструкцией
+    if (stream.current() && stream.current().type !== "DEDENT") {
+      body.push(parsePythonStatement(stream));
+    }
   }
+  stream.expect("DEDENT"); // Ожидаем завершение блока for
+
   return new ASTNode("ForStatement", {
     iterator: iterator.value,
     start: startNum.value,
@@ -744,10 +830,19 @@ function parsePythonWhile(stream) {
   const start = stream.expect("KEYWORD", "while");
   const condition = parsePythonExpression(stream);
   stream.expect("OP", ":");
+
+  // Ожидаем NEWLINE и INDENT
+  expectNewlineAndIndent(stream);
+
   const body = [];
-  while (stream.current() && stream.current().type !== "KEYWORD") {
-    body.push(parsePythonStatement(stream));
+  while (stream.current() && stream.current().type !== "DEDENT") {
+    skipNewlines(stream); // Пропускаем любые NEWLINE перед инструкцией
+    if (stream.current() && stream.current().type !== "DEDENT") {
+      body.push(parsePythonStatement(stream));
+    }
   }
+  stream.expect("DEDENT"); // Ожидаем завершение блока while
+
   return new ASTNode("WhileStatement", {
     condition,
     body,
@@ -759,17 +854,26 @@ function parsePythonTry(stream) {
   // try: <stmts> except: <stmts> [finally: <stmts>]
   const start = stream.expect("KEYWORD", "try");
   stream.expect("OP", ":");
+
+  // Ожидаем NEWLINE и INDENT, пропуская дополнительные NEWLINE
+  expectNewlineAndIndent(stream);
+
   const tryBody = [];
   while (
     stream.current() &&
+    stream.current().type !== "DEDENT" &&
     !(
       stream.current().type === "KEYWORD" &&
-      (stream.current().value === "except" ||
-        stream.current().value === "finally")
+      ["except", "finally"].includes(stream.current().value)
     )
   ) {
-    tryBody.push(parsePythonStatement(stream));
+    skipNewlines(stream); // Пропускаем любые NEWLINE перед инструкцией
+    if (stream.current() && stream.current().type !== "DEDENT") {
+      tryBody.push(parsePythonStatement(stream));
+    }
   }
+  stream.expect("DEDENT"); // Ожидаем завершение блока try
+
   let exceptBody = null;
   if (
     stream.current() &&
@@ -778,17 +882,27 @@ function parsePythonTry(stream) {
   ) {
     stream.next();
     stream.expect("OP", ":");
+
+    // Ожидаем NEWLINE и INDENT для блока except
+    expectNewlineAndIndent(stream);
+
     exceptBody = [];
     while (
       stream.current() &&
+      stream.current().type !== "DEDENT" &&
       !(
         stream.current().type === "KEYWORD" &&
         stream.current().value === "finally"
       )
     ) {
-      exceptBody.push(parsePythonStatement(stream));
+      skipNewlines(stream); // Пропускаем любые NEWLINE перед инструкцией
+      if (stream.current() && stream.current().type !== "DEDENT") {
+        exceptBody.push(parsePythonStatement(stream));
+      }
     }
+    stream.expect("DEDENT"); // Ожидаем завершение блока except
   }
+
   let finallyBody = null;
   if (
     stream.current() &&
@@ -797,11 +911,20 @@ function parsePythonTry(stream) {
   ) {
     stream.next();
     stream.expect("OP", ":");
+
+    // Ожидаем NEWLINE и INDENT для блока finally
+    expectNewlineAndIndent(stream);
+
     finallyBody = [];
-    while (stream.current() && stream.current().type !== null) {
-      finallyBody.push(parsePythonStatement(stream));
+    while (stream.current() && stream.current().type !== "DEDENT") {
+      skipNewlines(stream); // Пропускаем любые NEWLINE перед инструкцией
+      if (stream.current() && stream.current().type !== "DEDENT") {
+        finallyBody.push(parsePythonStatement(stream));
+      }
     }
+    stream.expect("DEDENT"); // Ожидаем завершение блока finally
   }
+
   return new ASTNode("TryStatement", {
     tryBody,
     exceptBody,
@@ -847,7 +970,7 @@ function parsePythonExpression(stream) {
       args.push(exprNode);
 
       if (stream.current() && stream.current().value === ",") {
-        stream.next(); // пропустить запятую и продолжить
+        stream.next(); // пропускаем запятую и продолжить
       } else {
         break;
       }

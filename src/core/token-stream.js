@@ -8,6 +8,7 @@ export class TokenStream {
     this.tokens = tokens;
     this.pos = 0;
     this.fileName = fileName;
+    this.indentStack = [0]; // Начальный уровень отступа
   }
 
   current() {
@@ -19,6 +20,12 @@ export class TokenStream {
   }
 
   next() {
+    const token = this.current();
+    if (token && token.type === "INDENT") {
+      this.indentStack.push(token.value); // Предполагается, что token.value содержит уровень отступа
+    } else if (token && token.type === "DEDENT") {
+      this.indentStack.pop();
+    }
     this.pos++;
     return this.current();
   }
@@ -47,5 +54,13 @@ export class TokenStream {
     }
     this.next();
     return token;
+  }
+
+  isAtEnd() {
+    return this.current() === null;
+  }
+
+  getCurrentIndent() {
+    return this.indentStack[this.indentStack.length - 1];
   }
 }
