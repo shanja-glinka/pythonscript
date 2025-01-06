@@ -8,6 +8,9 @@
 
 It is **not** a complete implementation of the entire Python or JS standard, but it provides insights into the architecture of a lexer, parser, and code generator.
 
+> [!IMPORTANT]
+> This project is created solely for entertainment purposes and does not claim to be serious or innovative. The features and materials provided are intended to create a light and casual experience. The project is not a professional tool or recommendation, and its use is at the discretion of the users.
+
 ## Project Structure
 
 ```bash
