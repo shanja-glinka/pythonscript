@@ -1,0 +1,55 @@
+#!/usr/bin/env node
+
+import { Command } from 'commander';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { build, run } from '../src/index.js';
+
+// Нужен для вычисления dirname (если используете ESM):
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const program = new Command();
+
+program
+  .name('pythonscript')
+  .description('CLI for PythonScript transpiler')
+  .version('1.0.0');
+
+program
+  .command('build <inputFile>')
+  .description('Транспилировать .pjs -> .js или .js -> .pjs')
+  .option('-o, --output <outputFile>', 'Путь к выходному файлу')
+  .action(async (inputFile, options) => {
+    // Здесь ваша логика build
+    if (!options.output) {
+      console.error("Ошибка: укажите --output или -o для выходного файла");
+      process.exit(1);
+    }
+    try {
+      await build(inputFile, options.output);
+      console.log(`Успешно: ${inputFile} -> ${options.output}`);
+    } catch (err) {
+      console.error("Ошибка при сборке:");
+      console.log(err);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('run <inputFile>')
+  .description('Выполнить код напрямую (node-режим или browser-режим)')
+  .option('--mode <mode>', 'node | browser', 'node')
+  .action(async (inputFile, options) => {
+    try {
+      await run(inputFile, { mode: options.mode });
+      console.log("Выполнение завершено");
+    } catch (err) {
+      console.error("Ошибка при выполнении:", err);
+      process.exit(1);
+    }
+  });
+
+program.showHelpAfterError();
+
+program.parse(process.argv);
