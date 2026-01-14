@@ -1,12 +1,19 @@
 {
   "name": "pythonscript",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "type": "module",
-  "description": "A simple transpiler/interpreter for a Python-like subset to JavaScript (and vice versa).",
+  "description": "Playful CLI/JS library that transpiles a toy Python subset to JavaScript (and back) for Node.js and browser demos.",
   "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
   "bin": {
     "pythonscript": "./bin/pythonscript"
   },
+  "files": [
+    "bin",
+    "src"
+  ],
   "scripts": {
     "test": "node test/runner.test.js",
     "build": "echo 'No build step defined; see bin/pythonscript for usage.'"
@@ -15,7 +22,9 @@
     "python",
     "javascript",
     "transpiler",
-    "interpreter"
+    "interpreter",
+    "cli",
+    "browser"
   ],
   "author": "Shanja Glinka <myemail@example.com>",
   "license": "ISC",
@@ -29,7 +38,10 @@
   "homepage": "https://github.com/shanja-glinka/pythonscript#readme",
   "directories": {
     "doc": "docs",
-    "test": "tests"
+    "test": "test"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "commander": "^13.0.0"

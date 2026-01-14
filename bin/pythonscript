@@ -1,51 +1,81 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { build, run } from '../src/index.js';
+import { Command } from "commander";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+import { build, run } from "../src/index.js";
 
-// Нужен для вычисления dirname (если используете ESM):
+const require = createRequire(import.meta.url);
+const pkg = require("../package.json");
+
+// Needed for dirname if ever required by consumers
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const program = new Command();
 
-program
-  .name('pythonscript')
-  .description('CLI for PythonScript transpiler')
-  .version('1.0.0');
+function ensureSupportedExtension(file) {
+  const ext = path.extname(file).toLowerCase();
+  const supported = [".pjs", ".js"];
+  if (!supported.includes(ext)) {
+    console.error(
+      `Unsupported input extension "${ext}". Use .pjs (toy Python) or .js (JavaScript).`
+    );
+    process.exit(1);
+  }
+  return ext;
+}
 
 program
-  .command('build <inputFile>')
-  .description('Транспилировать .pjs -> .js или .js -> .pjs')
-  .option('-o, --output <outputFile>', 'Путь к выходному файлу')
+  .name("pythonscript")
+  .description(
+    "Toy transpiler CLI: .pjs (Python-like) <-> .js, runnable in Node.js or a browser wrapper."
+  )
+  .version(pkg.version);
+
+program
+  .command("build <inputFile>")
+  .description("Transpile .pjs -> .js or .js -> .pjs")
+  .option("-o, --output <outputFile>", "Path to output file")
   .action(async (inputFile, options) => {
-    // Здесь ваша логика build
     if (!options.output) {
-      console.error("Ошибка: укажите --output или -o для выходного файла");
+      console.error("Missing required flag: --output <file>");
       process.exit(1);
     }
+
+    ensureSupportedExtension(inputFile);
+
     try {
       await build(inputFile, options.output);
-      console.log(`Успешно: ${inputFile} -> ${options.output}`);
+      console.log(`Done: ${inputFile} -> ${options.output}`);
     } catch (err) {
-      console.error("Ошибка при сборке:");
-      console.log(err);
+      console.error("Build failed:");
+      console.error(err);
       process.exit(1);
     }
   });
 
 program
-  .command('run <inputFile>')
-  .description('Выполнить код напрямую (node-режим или browser-режим)')
-  .option('--mode <mode>', 'node | browser', 'node')
+  .command("run <inputFile>")
+  .description("Execute generated JavaScript in Node or a browser-like wrapper")
+  .option("--mode <mode>", "node | browser", "node")
   .action(async (inputFile, options) => {
+    const ext = ensureSupportedExtension(inputFile);
+    if (!["node", "browser"].includes(options.mode)) {
+      console.error('Mode must be "node" or "browser".');
+      process.exit(1);
+    }
+
+    console.warn(
+      "[Warning] Code is executed without sandboxing; do not run untrusted sources."
+    );
+
     try {
       await run(inputFile, { mode: options.mode });
-      console.log("Выполнение завершено");
+      console.log("Execution finished");
     } catch (err) {
-      console.error("Ошибка при выполнении:", err);
+      console.error("Execution failed:", err);
       process.exit(1);
     }
   });

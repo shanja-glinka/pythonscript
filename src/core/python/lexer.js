@@ -94,7 +94,6 @@ export function tokenizePython(code, fileName = "<anonymous>") {
   }
 
   function handleIndentation() {
-    let start = pos;
     let currentLine = "";
     while (currentChar() === " " || currentChar() === "\t") {
       currentLine += currentChar();
@@ -111,18 +110,22 @@ export function tokenizePython(code, fileName = "<anonymous>") {
     }
 
     const indentLevel = currentLine.replace(/\t/g, "    ").length; // Преобразуем табы в 4 пробела
+    const currentIndent = indentStack[indentStack.length - 1];
 
-    if (indentLevel > indentStack[indentStack.length - 1]) {
+    if (indentLevel > currentIndent) {
       indentStack.push(indentLevel);
-      addToken("INDENT", "");
+      addToken("INDENT", indentLevel);
     } else {
       while (indentLevel < indentStack[indentStack.length - 1]) {
-        indentStack.pop();
-        addToken("DEDENT", "");
+        const popped = indentStack.pop();
+        addToken("DEDENT", popped);
       }
       if (indentLevel !== indentStack[indentStack.length - 1]) {
         throw new PScriptError(
-          `Некорректный отступ на линии ${line}, колонка ${col}`
+          `Некорректный отступ на линии ${line}, колонка ${col}`,
+          fileName,
+          line,
+          col
         );
       }
     }
@@ -295,14 +298,17 @@ export function tokenizePython(code, fileName = "<anonymous>") {
 
     // Если символ не распознан
     throw new PScriptError(
-      `Неизвестный символ '${ch}' на линии ${line}, колонка ${col}`
+      `Неизвестный символ '${ch}' на линии ${line}, колонка ${col}`,
+      fileName,
+      line,
+      col
     );
   }
 
   // Добавляем DEDENT токены до базового уровня
   while (indentStack.length > 1) {
-    indentStack.pop();
-    addToken("DEDENT", "");
+    const popped = indentStack.pop();
+    addToken("DEDENT", popped);
   }
 
   return tokens;

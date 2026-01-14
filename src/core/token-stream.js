@@ -24,6 +24,14 @@ export class TokenStream {
     if (token && token.type === "INDENT") {
       this.indentStack.push(token.value); // Предполагается, что token.value содержит уровень отступа
     } else if (token && token.type === "DEDENT") {
+      if (this.indentStack.length === 1) {
+        throw new PScriptError(
+          "Лишний DEDENT",
+          this.fileName,
+          token.line,
+          token.col
+        );
+      }
       this.indentStack.pop();
     }
     this.pos++;
