@@ -12,11 +12,11 @@
 ## Установка
 Можно использовать через `npx` или установить глобально:
 ```bash
-npm install -g shanja-glinka/pythonscript
+npm install -g @shanja-glinka/pythonscript
 ```
 или локально в проект:
 ```bash
-npm install shanja-glinka/pythonscript
+npm install @shanja-glinka/pythonscript
 ```
 
 ## Использование CLI
