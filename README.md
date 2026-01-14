@@ -60,4 +60,5 @@ npm test
 
 ## Links
 - Русский README: [README.ru.md](README.ru.md)
+- Supported subset: [SUPPORTED.md](SUPPORTED.md)
 - Issues: https://github.com/shanja-glinka/pythonscript/issues
