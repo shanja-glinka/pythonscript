@@ -12,11 +12,11 @@ Toy transpiler/interpreter that flips a tiny Python-like dialect (`.pjs`) into J
 ## Install
 Use it directly with `npx` or install globally:
 ```bash
-npm install -g @shanja-glinka/pythonscript
+npm install -g shanja-glinka/pythonscript
 ```
 or locally in a project:
 ```bash
-npm install @shanja-glinka/pythonscript
+npm install shanja-glinka/pythonscript
 ```
 
 ## CLI usage

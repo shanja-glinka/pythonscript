@@ -1,6 +1,6 @@
 {
   "name": "@shanja-glinka/pythonscript",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "description": "Playful CLI/JS library that transpiles a toy Python subset to JavaScript (and back) for Node.js and browser demos.",
   "main": "src/index.js",
