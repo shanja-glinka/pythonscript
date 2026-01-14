@@ -1,0 +1,19 @@
+# Расширенные фичи: срезы, логические операторы, тернарный оператор, расширенные присваивания
+
+arr = [1, 2, 3, 4, 5]
+print("slice1", arr[1:3])
+print("slice2", arr[:2])
+print("slice3", arr[3:])
+
+x = 1
+x += 2
+print("x", x)
+
+flag = True and not False or False
+print("flag", flag)
+
+val = 5 if x > 2 else 0
+print("val", val)
+
+none_val = None
+print("none", none_val)

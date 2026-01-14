@@ -22,10 +22,14 @@ npm install pythonscript
 ## Использование CLI
 ```bash
 pythonscript --help
+pythonscript tokenize input.pjs               # отладка: токены в JSON
+pythonscript ast input.pjs                    # отладка: AST в JSON
+pythonscript lint input.pjs                   # синтаксическая проверка поддерживаемого подмножества
 pythonscript build input.pjs -o dist/output.js   # транспиляция
 pythonscript build input.js  -o dist/output.pjs  # обратная демонстрация
-pythonscript run dist/output.js --mode=node      # запуск в Node
-pythonscript run dist/output.js --mode=browser   # запуск в браузерной обёртке
+pythonscript run dist/output.js --mode=node --unsafe               # запуск в Node
+pythonscript run dist/output.js --mode=node --unsafe --sandbox     # запуск в vm-песочнице (best-effort)
+pythonscript run dist/output.js --mode=browser --unsafe            # запуск в браузерной обёртке
 ```
 
 ### Быстрая демонстрация
@@ -36,8 +40,9 @@ pythonscript run dist/scalars.js --mode=node
 
 ## Ограничения
 - Это игровое, неполное подмножество — многие конструкции упрощены или заглушены.
-- Исполнение без песочницы; относитесь к выходному JS как к любому исполняемому файлу.
+- Исполнение без песочницы по умолчанию; относитесь к выходному JS как к любому исполняемому файлу. В Node есть опциональный best-effort `--sandbox`.
 - Режим браузера — тонкая обёртка над `new Function`, DOM не эмулируется.
+- Перед сгенерированным кодом подключается небольшой stdlib (`print`, `len`, `range`) — это не полноценный Python runtime.
 
 ## Структура проекта (кратко)
 ```

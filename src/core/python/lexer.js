@@ -21,6 +21,12 @@ const KEYWORDS = new Set([
   "print", // пусть тоже будет ключевым
   "in",
   "range",
+  "and",
+  "or",
+  "not",
+  "None",
+  "True",
+  "False",
 ]);
 
 const SINGLE_OPS = new Set([
@@ -274,8 +280,21 @@ export function tokenizePython(code, fileName = "<anonymous>") {
     }
 
     // Многосимвольные операторы
-    const twoCharOps = new Set(["//", "**", "==", "!=", "<=", ">="]);
-    const threeCharOps = new Set(); // В Python нет трехсимвольных операторов по умолчанию
+    const twoCharOps = new Set([
+      "//",
+      "**",
+      "==",
+      "!=",
+      "<=",
+      ">=",
+      "+=",
+      "-=",
+      "*=",
+      "/=",
+      "%=",
+      "//=",
+    ]);
+    const threeCharOps = new Set(["**="]); // для возведения в степень с присваиванием
     let op = code.slice(pos, pos + 3);
     if (threeCharOps.has(op)) {
       addToken("OP", op);

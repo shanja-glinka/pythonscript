@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { build, run } from "../src/index.js";
+import { build, parseFile, run, tokenizeFile } from "../src/index.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json");
@@ -27,6 +28,14 @@ function ensureSupportedExtension(file) {
   return ext;
 }
 
+function maybeWriteOutput(json, outputFile) {
+  if (!outputFile) {
+    process.stdout.write(json + "\n");
+    return;
+  }
+  return fs.writeFile(outputFile, json, "utf8");
+}
+
 program
   .name("pythonscript")
   .description(
@@ -35,9 +44,65 @@ program
   .version(pkg.version);
 
 program
+  .command("tokenize <inputFile>")
+  .description("Print token stream as JSON")
+  .option("-o, --output <outputFile>", "Write JSON to a file instead of stdout")
+  .action(async (inputFile, options) => {
+    ensureSupportedExtension(inputFile);
+    try {
+      const tokens = await tokenizeFile(inputFile);
+      const json = JSON.stringify(tokens, null, 2);
+      await maybeWriteOutput(json, options.output);
+    } catch (err) {
+      console.error("Tokenize failed:");
+      console.error(err);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("ast <inputFile>")
+  .description("Print parsed AST as JSON")
+  .option("-o, --output <outputFile>", "Write JSON to a file instead of stdout")
+  .action(async (inputFile, options) => {
+    ensureSupportedExtension(inputFile);
+    try {
+      const ast = await parseFile(inputFile);
+      const json = JSON.stringify(ast, null, 2);
+      await maybeWriteOutput(json, options.output);
+    } catch (err) {
+      console.error("AST parse failed:");
+      console.error(err);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("lint <inputFile>")
+  .description("Parse file and report syntax issues (subset awareness)")
+  .option("--target <target>", "node | browser", "node")
+  .action(async (inputFile, options) => {
+    ensureSupportedExtension(inputFile);
+    if (!["node", "browser"].includes(options.target)) {
+      console.error('Target must be "node" or "browser".');
+      process.exit(1);
+    }
+
+    try {
+      await parseFile(inputFile);
+      console.log(`Lint OK for ${inputFile} (target: ${options.target})`);
+    } catch (err) {
+      console.error(`Lint failed for ${inputFile}:`);
+      console.error(err?.message || err);
+      process.exit(1);
+    }
+  });
+
+program
   .command("build <inputFile>")
   .description("Transpile .pjs -> .js or .js -> .pjs")
   .option("-o, --output <outputFile>", "Path to output file")
+  .option("--target <target>", "node | browser", "node")
   .action(async (inputFile, options) => {
     if (!options.output) {
       console.error("Missing required flag: --output <file>");
@@ -46,8 +111,13 @@ program
 
     ensureSupportedExtension(inputFile);
 
+    if (!["node", "browser"].includes(options.target)) {
+      console.error('Target must be "node" or "browser".');
+      process.exit(1);
+    }
+
     try {
-      await build(inputFile, options.output);
+      await build(inputFile, options.output, { target: options.target });
       console.log(`Done: ${inputFile} -> ${options.output}`);
     } catch (err) {
       console.error("Build failed:");
@@ -60,19 +130,36 @@ program
   .command("run <inputFile>")
   .description("Execute generated JavaScript in Node or a browser-like wrapper")
   .option("--mode <mode>", "node | browser", "node")
+  .option("--unsafe", "Allow execution of code (required)", false)
+  .option("--sandbox", "Use a minimal vm sandbox in Node mode", false)
+  .option("--timeout <ms>", "Timeout for sandbox execution in ms", "1000")
   .action(async (inputFile, options) => {
-    const ext = ensureSupportedExtension(inputFile);
+    ensureSupportedExtension(inputFile);
     if (!["node", "browser"].includes(options.mode)) {
       console.error('Mode must be "node" or "browser".');
       process.exit(1);
     }
 
-    console.warn(
-      "[Warning] Code is executed without sandboxing; do not run untrusted sources."
-    );
+    if (!options.unsafe) {
+      console.error(
+        'Execution is disabled by default. Re-run with "--unsafe" (and optionally "--sandbox").'
+      );
+      process.exit(1);
+    }
+
+    const timeoutMs = Number(options.timeout);
+    if (!Number.isFinite(timeoutMs) || timeoutMs < 1) {
+      console.error('Invalid "--timeout" value. Expected a positive number.');
+      process.exit(1);
+    }
 
     try {
-      await run(inputFile, { mode: options.mode });
+      await run(inputFile, {
+        mode: options.mode,
+        unsafe: options.unsafe,
+        sandbox: options.sandbox,
+        timeoutMs,
+      });
       console.log("Execution finished");
     } catch (err) {
       console.error("Execution failed:", err);

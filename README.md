@@ -22,10 +22,14 @@ npm install pythonscript
 ## CLI usage
 ```bash
 pythonscript --help
+pythonscript tokenize input.pjs               # debug: tokens as JSON
+pythonscript ast input.pjs                    # debug: AST as JSON
+pythonscript lint input.pjs                   # syntax check for the supported subset
 pythonscript build input.pjs -o dist/output.js   # transpile
 pythonscript build input.js  -o dist/output.pjs  # reverse demo
-pythonscript run dist/output.js --mode=node      # execute in Node
-pythonscript run dist/output.js --mode=browser   # execute with browser shim
+pythonscript run dist/output.js --mode=node --unsafe               # execute in Node
+pythonscript run dist/output.js --mode=node --unsafe --sandbox     # execute in vm sandbox (best-effort)
+pythonscript run dist/output.js --mode=browser --unsafe            # execute with browser shim
 ```
 
 ### Quick demo
@@ -36,8 +40,9 @@ pythonscript run dist/scalars.js --mode=node
 
 ## Limitations
 - This is a playful, incomplete subset — many language features are stubbed or simplified.
-- Execution is unsandboxed; treat outputs like any other JS file you run.
+- Execution is unsandboxed by default; treat outputs like any other JS file you run. Node mode supports an optional best-effort `--sandbox`.
 - Browser mode is a thin wrapper around `new Function`; there is no DOM emulation.
+- A tiny stdlib (`print`, `len`, `range`) is injected before generated code for convenience; it is not a full Python runtime.
 
 ## Project layout (short)
 ```

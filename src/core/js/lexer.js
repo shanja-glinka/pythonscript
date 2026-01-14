@@ -281,6 +281,21 @@ export function tokenizeJavaScript(code, fileName = "<anonymous>") {
       advance(2);
       continue;
     }
+    if (ch === "*" && code[pos + 1] === "*") {
+      addToken("OP", "**");
+      advance(2);
+      continue;
+    }
+    if (ch === "&" && code[pos + 1] === "&") {
+      addToken("OP", "&&");
+      advance(2);
+      continue;
+    }
+    if (ch === "|" && code[pos + 1] === "|") {
+      addToken("OP", "||");
+      advance(2);
+      continue;
+    }
 
     // Односимвольные операторы
     if (singleOps.has(ch)) {

@@ -32,8 +32,8 @@ function skipNewlines(stream) {
 
 //
 function parsePower(stream) {
-  // обрабатывает возведение в степень (**)
-  let base = parseFactor(stream);
+  // возведение в степень (**), правоассоциативно
+  let base = parseUnary(stream);
   while (
     stream.current() &&
     stream.current().type === "OP" &&
@@ -46,9 +46,26 @@ function parsePower(stream) {
   return base;
 }
 
-// parseExpr разберёт суммы и разности
+function parseTerm(stream) {
+  // *, /, //, %
+  let left = parsePower(stream);
+  while (true) {
+    const cur = stream.current();
+    if (!cur || cur.type !== "OP") break;
+    if (["*", "/", "//", "%"].includes(cur.value)) {
+      const op = cur.value;
+      stream.next();
+      const right = parsePower(stream);
+      left = new ASTNode("BinOp", { op, left, right });
+    } else {
+      break;
+    }
+  }
+  return left;
+}
+
 function parseExpr(stream) {
-  // обрабатывает + и -
+  // +, -
   let left = parseTerm(stream);
   while (true) {
     const cur = stream.current();
@@ -66,42 +83,109 @@ function parseExpr(stream) {
 }
 
 function parseComparison(stream) {
-  // Предположим, parseExpr обрабатывает +, -, *, /, ...
+  // сравнения и membership + цепочки
   let left = parseExpr(stream);
-  while (true) {
-    const cur = stream.current();
-    if (!cur || cur.type !== "OP") break;
+  const comparisons = [];
 
-    // Список операторов сравнения
-    if (["<", ">", "<=", ">=", "==", "!="].includes(cur.value)) {
-      const op = cur.value;
-      stream.next(); // пропускаем оператор
+  while (stream.current()) {
+    const cur = stream.current();
+
+    // "not in"
+    if (
+      cur.type === "KEYWORD" &&
+      cur.value === "not" &&
+      stream.peek(1) &&
+      stream.peek(1).type === "KEYWORD" &&
+      stream.peek(1).value === "in"
+    ) {
+      stream.next(); // not
+      stream.next(); // in
       const right = parseExpr(stream);
-      left = new ASTNode("BinOp", { op, left, right });
-    } else {
-      break;
+      comparisons.push({ op: "not in", right });
+      continue;
     }
+
+    // "in"
+    if (cur.type === "KEYWORD" && cur.value === "in") {
+      stream.next();
+      const right = parseExpr(stream);
+      comparisons.push({ op: "in", right });
+      continue;
+    }
+
+    if (cur.type === "OP" && ["<", ">", "<=", ">=", "==", "!="].includes(cur.value)) {
+      const op = cur.value;
+      stream.next();
+      const right = parseExpr(stream);
+      comparisons.push({ op, right });
+      continue;
+    }
+
+    break;
+  }
+
+  if (comparisons.length === 0) {
+    return left;
+  }
+
+  return new ASTNode("CompareChain", { left, comparisons });
+}
+
+function parseBoolNot(stream) {
+  const cur = stream.current();
+  if (cur && cur.type === "KEYWORD" && cur.value === "not") {
+    stream.next();
+    const operand = parseBoolNot(stream);
+    return new ASTNode("UnaryOp", { op: "not", operand });
+  }
+  return parseComparison(stream);
+}
+
+function parseBoolAnd(stream) {
+  let left = parseBoolNot(stream);
+  while (
+    stream.current() &&
+    stream.current().type === "KEYWORD" &&
+    stream.current().value === "and"
+  ) {
+    const op = stream.current().value;
+    stream.next();
+    const right = parseBoolNot(stream);
+    left = new ASTNode("BooleanOp", { op, left, right });
   }
   return left;
 }
 
-// parseTerm разберёт умножение, деление, //, %
-function parseTerm(stream) {
-  // обрабатывает * / // %
-  let left = parsePower(stream);
-  while (true) {
-    const cur = stream.current();
-    if (!cur || cur.type !== "OP") break;
-    if (["*", "/", "//", "%"].includes(cur.value)) {
-      const op = cur.value;
-      stream.next();
-      const right = parsePower(stream);
-      left = new ASTNode("BinOp", { op, left, right });
-    } else {
-      break;
-    }
+function parseBoolOr(stream) {
+  let left = parseBoolAnd(stream);
+  while (
+    stream.current() &&
+    stream.current().type === "KEYWORD" &&
+    stream.current().value === "or"
+  ) {
+    const op = stream.current().value;
+    stream.next();
+    const right = parseBoolAnd(stream);
+    left = new ASTNode("BooleanOp", { op, left, right });
   }
   return left;
+}
+
+function parseConditional(stream) {
+  // x if cond else y
+  let expr = parseBoolOr(stream);
+  if (stream.current() && stream.current().type === "KEYWORD" && stream.current().value === "if") {
+    stream.next(); // if
+    const test = parseBoolOr(stream);
+    stream.expect("KEYWORD", "else");
+    const alternate = parseBoolOr(stream);
+    expr = new ASTNode("ConditionalExpression", {
+      test,
+      consequent: expr,
+      alternate,
+    });
+  }
+  return expr;
 }
 
 function parseListLiteral(stream) {
@@ -216,6 +300,16 @@ function parseFStringContent(raw, fileName, line, col) {
   return new ASTNode("FStringLiteral", { segments });
 }
 
+function parseUnary(stream) {
+  const token = stream.current();
+  if (token && token.type === "OP" && (token.value === "-" || token.value === "+")) {
+    stream.next();
+    const operand = parseUnary(stream);
+    return new ASTNode("UnaryOp", { op: token.value, operand });
+  }
+  return parsePrimary(stream);
+}
+
 // Обрабатывает (expr), NUMBER, STRING, IDENTIFIER, [list-literal], {dict?}, и т.д.// обрабатывает числа, идентификаторы, скобки (…)
 function parseAtom(stream) {
   const token = stream.current();
@@ -266,6 +360,18 @@ function parseAtom(stream) {
     return parseFStringContent(raw, stream.fileName, token.line, token.col);
   }
 
+  // None / True / False
+  if (token.type === "KEYWORD") {
+    if (token.value === "None") {
+      stream.next();
+      return new ASTNode("NullLiteral", {});
+    }
+    if (token.value === "True" || token.value === "False") {
+      stream.next();
+      return new ASTNode("BooleanLiteral", { value: token.value === "True" });
+    }
+  }
+
   // NUMBER ?
   if (token.type === "NUMBER") {
     stream.next();
@@ -281,24 +387,7 @@ function parseAtom(stream) {
   // IDENTIFIER ?
   if (token.type === "IDENTIFIER") {
     stream.next();
-    let node = new ASTNode("Variable", { name: token.value });
-    // Проверим, нет ли после идентификатора конструкции [ ... ]
-    while (
-      stream.current() &&
-      stream.current().type === "OP" &&
-      stream.current().value === "["
-    ) {
-      stream.next(); // пропускаем '['
-      const indexExpr = parseExpr(stream);
-      stream.expect("OP", "]");
-      // Заворачиваем в ASTNode("IndexAccess", { object: node, index: indexExpr })
-      node = new ASTNode("IndexAccess", {
-        object: node,
-        index: indexExpr,
-      });
-    }
-
-    return node;
+    return new ASTNode("Variable", { name: token.value });
   }
 
   // [ expr ]
@@ -327,7 +416,7 @@ function parseCallArguments(stream, calleeNode) {
     stream.current() &&
     !(stream.current().type === "OP" && stream.current().value === ")")
   ) {
-    const argExpr = parseMembership(stream);
+    const argExpr = parseConditional(stream);
     args.push(argExpr);
     if (
       stream.current() &&
@@ -347,8 +436,8 @@ function parseCallArguments(stream, calleeNode) {
   });
 }
 
-// parseFactor парсит числа, идентификаторы, скобки (…)
-function parseFactor(stream) {
+// parsePrimary парсит числа, идентификаторы, скобки (…)
+function parsePrimary(stream) {
   // 1) Парсим базовый атом (число, строка, идентификатор, (expr), список [...], etc.)
   let node = parseAtom(stream);
 
@@ -390,11 +479,45 @@ function parseFactor(stream) {
         // parseCallArguments — ваша функция, создающая AST-узел 'CallExpression', где callee = node
       }
     } else if (cur.value === "[") {
-      // Индексация: obj[expr]
+      // Индексация или срез: obj[...]
       stream.next(); // пропустить '['
-      const indexExpr = parseExpr(stream);
+
+      // Срезы вида start:stop:step
+      let start = null;
+      let stop = null;
+      let step = null;
+      let isSlice = false;
+
+      if (!(stream.current() && stream.current().type === "OP" && stream.current().value === ":") &&
+          !(stream.current() && stream.current().type === "OP" && stream.current().value === "]")) {
+        start = parseConditional(stream);
+      }
+
+      if (stream.current() && stream.current().type === "OP" && stream.current().value === ":") {
+        isSlice = true;
+        stream.next(); // пропустить ':'
+        if (
+          stream.current() &&
+          !(stream.current().type === "OP" && [";", ":"].includes(stream.current().value)) &&
+          !(stream.current().type === "OP" && stream.current().value === "]")
+        ) {
+          stop = parseConditional(stream);
+        }
+        if (stream.current() && stream.current().type === "OP" && stream.current().value === ":") {
+          stream.next(); // пропустить вторую ':'
+          if (stream.current() && !(stream.current().type === "OP" && stream.current().value === "]")) {
+            step = parseConditional(stream);
+          }
+        }
+      }
+
       stream.expect("OP", "]");
-      node = new ASTNode("IndexAccess", { object: node, index: indexExpr });
+
+      if (isSlice) {
+        node = new ASTNode("SliceAccess", { object: node, start, stop, step });
+      } else {
+        node = new ASTNode("IndexAccess", { object: node, index: start });
+      }
     } else if (cur.value === "(") {
       // Вызов функции (или метода) без точки: foo(...)
       // Но если node === Variable('foo'), то это вызов функции foo(...)
@@ -406,43 +529,6 @@ function parseFactor(stream) {
   }
 
   return node;
-}
-
-function parseMembership(stream) {
-  // Предположим, у нас есть parseComparison, обрабатывающая <, >, ==, !=, ...
-  let left = parseComparison(stream);
-
-  while (true) {
-    const cur = stream.current();
-    if (!cur) break;
-
-    // Проверяем, не встретили ли мы ключевое слово 'in'
-    if (cur.type === "KEYWORD" && cur.value === "in") {
-      // membership: left in right
-      stream.next(); // пропускаем 'in'
-      const right = parseComparison(stream);
-      left = new ASTNode("MembershipTest", { op: "in", left, right });
-    }
-    // Может быть 'not in'
-    else if (
-      cur.type === "KEYWORD" &&
-      cur.value === "not" &&
-      stream.peek(1) &&
-      stream.peek(1).type === "KEYWORD" &&
-      stream.peek(1).value === "in"
-    ) {
-      // left not in right
-      stream.next(); // пропускаем 'not'
-      stream.next(); // пропускаем 'in'
-      const right = parseComparison(stream);
-      left = new ASTNode("MembershipTest", { op: "not in", left, right });
-    } else {
-      // никаких 'in' / 'not in' — выходим
-      break;
-    }
-  }
-
-  return left;
 }
 
 function parseDictLiteral(stream) {
@@ -474,7 +560,6 @@ function parseDictLiteral(stream) {
 
     // Парсим value как полноценное выражение
     const valueExpr = parsePythonExpression(stream);
-    // (или parseMembership, parseComparison, ... если у вас есть единый верхний парсер)
 
     pairs.push({
       key: keyToken.value,
@@ -501,7 +586,7 @@ function parseDictLiteral(stream) {
 
 function parseAssignment(stream) {
   // Разбираем "левое" выражение (которое может быть self.name, arr[0], просто x, и т.д.)
-  let left = parseMembership(stream); // или parseExpr, parseMembership — на ваше усмотрение
+  let left = parseConditional(stream);
 
   // Если следующий токен — "=", значит это присваивание
   const cur = stream.current();
@@ -517,6 +602,16 @@ function parseAssignment(stream) {
       right,
       loc: { line: eqToken.line, col: eqToken.col },
     });
+  }
+
+  // Расширенные присваивания: +=, -=, *=, /=, //=, %=, **=
+  const augOps = ["+=", "-=", "*=", "/=", "//=", "%=", "**="];
+  if (cur && cur.type === "OP" && augOps.includes(cur.value)) {
+    const op = cur.value;
+    const loc = { line: cur.line, col: cur.col };
+    stream.next();
+    const right = parseAssignment(stream);
+    return new ASTNode("AugAssign", { op, left, right, loc });
   }
 
   // иначе это не присваивание, а просто выражение
@@ -660,22 +755,35 @@ function parsePythonFunction(stream) {
   const funcName = stream.expect("IDENTIFIER");
   stream.expect("OP", "(");
 
-  // Парсинг аргументов (упрощённо)
+  // Парсинг аргументов
   const args = [];
-  if (stream.current() && stream.current().type === "IDENTIFIER") {
-    const firstArg = stream.current();
-    stream.next();
-    if (firstArg.value !== "self") {
-      // исключаем 'self'
-      args.push(firstArg.value);
-    }
-    while (stream.current() && stream.current().value === ",") {
-      stream.next(); // пропускаем запятую
-      const nxt = stream.expect("IDENTIFIER");
-      if (nxt.value !== "self") {
-        // исключаем 'self'
-        args.push(nxt.value);
+  while (stream.current() && !(stream.current().type === "OP" && stream.current().value === ")")) {
+    // *args / **kwargs
+    if (stream.current().type === "OP" && stream.current().value === "*") {
+      stream.next();
+      const argToken = stream.expect("IDENTIFIER");
+      args.push({ name: argToken.value, kind: "rest" });
+    } else if (stream.current().type === "OP" && stream.current().value === "**") {
+      stream.next();
+      const argToken = stream.expect("IDENTIFIER");
+      args.push({ name: argToken.value, kind: "kwargs" });
+    } else {
+      const argToken = stream.expect("IDENTIFIER");
+      if (argToken.value !== "self") {
+        let defaultValue = null;
+        if (stream.current() && stream.current().type === "OP" && stream.current().value === "=") {
+          stream.next();
+          defaultValue = parseConditional(stream);
+        }
+        args.push({ name: argToken.value, kind: "positional", default: defaultValue });
       }
+    }
+
+    if (stream.current() && stream.current().type === "OP" && stream.current().value === ",") {
+      stream.next();
+      continue;
+    } else {
+      break;
     }
   }
   stream.expect("OP", ")");
@@ -703,7 +811,7 @@ function parsePythonFunction(stream) {
 function parsePythonIf(stream) {
   // if <expr>: <statements> [elif <expr>: <statements>] [else: <statements>]
   const start = stream.expect("KEYWORD", "if");
-  const condition = parseMembership(stream);
+  const condition = parseBoolOr(stream);
   stream.expect("OP", ":");
 
   // Ожидаем NEWLINE и INDENT
@@ -732,7 +840,7 @@ function parsePythonIf(stream) {
     stream.current().value === "elif"
   ) {
     stream.next(); // пропускаем 'elif'
-    const elifCond = parseMembership(stream);
+    const elifCond = parseBoolOr(stream);
     stream.expect("OP", ":");
 
     // Ожидаем NEWLINE и INDENT
@@ -803,12 +911,12 @@ function parsePythonFor(stream) {
     );
   }
   stream.expect("OP", "(");
-  // parse expression (упростим, что там всегда NUMBER)
-  const startNum = stream.expect("NUMBER");
+  // parse expression(ы)
+  const startNum = parseConditional(stream);
   let endNum = null;
   if (stream.current() && stream.current().value === ",") {
     stream.next(); // пропустить запятую
-    endNum = stream.expect("NUMBER");
+    endNum = parseConditional(stream);
   }
   stream.expect("OP", ")");
   stream.expect("OP", ":");
@@ -836,7 +944,7 @@ function parsePythonFor(stream) {
 
 function parsePythonWhile(stream) {
   const start = stream.expect("KEYWORD", "while");
-  const condition = parsePythonExpression(stream);
+  const condition = parseBoolOr(stream);
   stream.expect("OP", ":");
 
   // Ожидаем NEWLINE и INDENT
@@ -972,10 +1080,10 @@ function parsePythonExpression(stream) {
     const args = [];
 
     // Простейший метод: парсим выражения, разделённые запятыми, до ')'
-    while (stream.current() && stream.current().value !== ")") {
-      // Вызываем parseExpr (или parsePythonExpression) для одного аргумента
-      const exprNode = parseMembership(stream);
-      args.push(exprNode);
+      while (stream.current() && stream.current().value !== ")") {
+        // Вызываем parseExpr (или parsePythonExpression) для одного аргумента
+        const exprNode = parseConditional(stream);
+        args.push(exprNode);
 
       if (stream.current() && stream.current().value === ",") {
         stream.next(); // пропускаем запятую и продолжить

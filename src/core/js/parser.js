@@ -1,316 +1,257 @@
 import { ASTNode } from "../ast.js";
 import { TokenStream } from "../token-stream.js";
 
-/* =========================================
-      ПАРСЕР J A V A S C R I P T
-   ========================================= */
+const PRECEDENCE = [
+  ["||"],
+  ["&&"],
+  ["==", "===", "!=", "!==", "<", ">", "<=", ">="],
+  ["+", "-"],
+  ["*", "/", "%"],
+  ["**"],
+];
 
 export function parseJavaScriptTokens(tokens, fileName = "<anonymous>") {
-  // Аналогично, но для JS
-  // Чтобы не растягивать ответ, пусть будет супер-упрощённый,
-  // возвращающий Program со списком "Statement" узлов.
   const stream = new TokenStream(tokens, fileName);
   const body = [];
 
   while (stream.current()) {
-    body.push(parseJSStatement(stream));
+    // пропускаем разделители
+    if (stream.current().type === "OP" && stream.current().value === ";") {
+      stream.next();
+      continue;
+    }
+    const stmt = parseJSStatement(stream);
+    if (stmt) body.push(stmt);
+    // пропускать финальные ;
+    if (stream.current() && stream.current().type === "OP" && stream.current().value === ";") {
+      stream.next();
+    }
   }
 
   return new ASTNode("Program", { body });
 }
 
 function parseJSStatement(stream) {
-  // Аналогично parsePythonStatement, но для JS
-  // Распознаём:
-  // import, function, class, if, for, while, try, return, etc.
   const token = stream.current();
   if (!token) return null;
 
-  if (token.type === "KEYWORD") {
-    switch (token.value) {
-      case "import":
-        return parseJSImport(stream);
-      case "function":
-        return parseJSFunction(stream);
-      case "class":
-        return parseJSClass(stream);
-      case "if":
-        return parseJSIf(stream);
-      case "for":
-        return parseJSFor(stream);
-      case "while":
-        return parseJSWhile(stream);
-      case "try":
-        return parseJSTry(stream);
-      case "return":
-        return parseJSReturn(stream);
-      default:
-        // Возможно console.log(...) или объявление let ...
-        return parseJSExpression(stream);
-    }
-  } else {
-    return parseJSExpression(stream);
+  if (token.type === "KEYWORD" && ["let", "const", "var"].includes(token.value)) {
+    return parseVariableDeclaration(stream);
   }
+
+  if (
+    token.type === "KEYWORD" &&
+    ["if", "else", "for", "while", "try", "catch", "finally", "function", "class"].includes(
+      token.value
+    )
+  ) {
+    skipStructure(stream);
+    return new ASTNode("IgnoredStatement", {});
+  }
+
+  // упрощённо: остальные строки — выражения
+  return parseExpression(stream);
 }
 
-// И т.д. — из-за длины ответа я не буду расписывать все парсеры для JS,
-// логика аналогична parsePython*.
-
-function parseJSImport(stream) {
-  // import <IDENTIFIER> from <STRING> (упрощённо)
-  const start = stream.expect("KEYWORD", "import");
-  const what = stream.expect("IDENTIFIER");
-  stream.expect("KEYWORD", "from");
-  const modPath = stream.expect("STRING");
-  return new ASTNode("ImportDeclaration", {
-    specifier: what.value,
-    source: modPath.value,
-    loc: { line: start.line, col: start.col },
-  });
-}
-
-function parseJSFunction(stream) {
-  stream.expect("KEYWORD", "function");
-  const nameToken = stream.expect("IDENTIFIER");
-  const name = nameToken.value;
-
-  stream.expect("OP", "(");
-
-  const params = [];
-  // Проверяем, есть ли параметры
-  if (!(stream.current().type === "OP" && stream.current().value === ")")) {
-    while (true) {
-      const paramToken = stream.expect("IDENTIFIER");
-      params.push(paramToken.value);
-
-      if (stream.current().type === "OP" && stream.current().value === ",") {
-        stream.next(); // Пропускаем запятую и продолжаем
-        continue;
+function skipStructure(stream) {
+  // Простейший пропуск блока {...}
+  stream.next(); // пропустить ключевое слово
+  // пропускаем до '{'
+  while (stream.current() && !(stream.current().type === "OP" && stream.current().value === "{")) {
+    stream.next();
+  }
+  if (stream.current() && stream.current().type === "OP" && stream.current().value === "{") {
+    let depth = 0;
+    while (stream.current()) {
+      if (stream.current().type === "OP" && stream.current().value === "{") depth++;
+      if (stream.current().type === "OP" && stream.current().value === "}") {
+        depth--;
+        if (depth === 0) {
+          stream.next();
+          break;
+        }
       }
-      break;
+      stream.next();
     }
   }
-  stream.expect("OP", ")");
-
-  stream.expect("OP", "{");
-
-  const body = [];
-  while (!(stream.current().type === "OP" && stream.current().value === "}")) {
-    body.push(parseJSStatement(stream));
-  }
-  stream.expect("OP", "}");
-
-  return {
-    type: "FunctionDeclaration",
-    name,
-    params,
-    body,
-  };
 }
 
-function parseJSClass(stream) {
-  const start = stream.expect("KEYWORD", "class");
-  const className = stream.expect("IDENTIFIER");
-  // Возможно extends ...
-  if (
-    stream.current() &&
-    stream.current().type === "KEYWORD" &&
-    stream.current().value === "extends"
-  ) {
-    // пропустить extends <IDENTIFIER>
+function parseVariableDeclaration(stream) {
+  stream.next(); // let/const/var
+  const id = stream.expect("IDENTIFIER");
+  let init = null;
+  if (stream.current() && stream.current().type === "OP" && stream.current().value === "=") {
     stream.next();
-    stream.expect("IDENTIFIER"); // упустим имя родительского класса
+    init = parseExpression(stream);
   }
-  stream.expect("OP", "{");
-  // упрощённо пропустим методы
-  while (stream.current() && stream.current().value !== "}") {
-    stream.next();
-  }
-  stream.expect("OP", "}");
-
-  return new ASTNode("ClassDeclaration", {
-    name: className.value,
-    body: [],
-    loc: { line: start.line, col: start.col },
+  return new ASTNode("VariableDeclaration", {
+    id: id.value,
+    init,
   });
 }
 
-function parseJSIf(stream) {
-  // if (<expr>) { ... } else { ... }
-  const start = stream.expect("KEYWORD", "if");
-  stream.expect("OP", "(");
-  // в реальности нужно разобрать выражение
-  while (stream.current() && stream.current().value !== ")") {
-    stream.next();
+function parseExpression(stream) {
+  return parseBinary(stream, 0);
+}
+
+function parseBinary(stream, precIndex) {
+  if (precIndex >= PRECEDENCE.length) {
+    return parseUnary(stream);
   }
-  stream.expect("OP", ")");
-  stream.expect("OP", "{");
-  while (stream.current() && stream.current().value !== "}") {
+
+  let left = parseBinary(stream, precIndex + 1);
+
+  while (true) {
+    const cur = stream.current();
+    if (!cur || cur.type !== "OP") break;
+    if (!PRECEDENCE[precIndex].includes(cur.value)) break;
+    const op = cur.value;
     stream.next();
+    const right = parseBinary(stream, precIndex + 1);
+    const nodeType = ["&&", "||"].includes(op) ? "LogicalExpression" : "BinaryExpression";
+    left = new ASTNode(nodeType, { operator: op, left, right });
   }
-  stream.expect("OP", "}");
-  // else ...
-  if (
-    stream.current() &&
-    stream.current().type === "KEYWORD" &&
-    stream.current().value === "else"
-  ) {
+
+  return left;
+}
+
+function parseUnary(stream) {
+  const cur = stream.current();
+  if (cur && cur.type === "OP" && (cur.value === "!" || cur.value === "-" || cur.value === "+")) {
     stream.next();
-    if (stream.current() && stream.current().value === "if") {
-      // else if
-      // ... рекурсивный разбор?
-      // для упрощения опустим
-    } else {
-      // else { ... }
-      if (stream.current() && stream.current().value === "{") {
+    const argument = parseUnary(stream);
+    return new ASTNode("UnaryExpression", { operator: cur.value, argument });
+  }
+  return parseCallMember(stream);
+}
+
+function parseCallMember(stream) {
+  let obj = parsePrimary(stream);
+
+  while (true) {
+    const cur = stream.current();
+    if (!cur || cur.type !== "OP") break;
+
+    if (cur.value === ".") {
+      stream.next();
+      const prop = stream.expect("IDENTIFIER");
+      obj = new ASTNode("MemberExpression", {
+        object: obj,
+        property: new ASTNode("Identifier", { name: prop.value }),
+        computed: false,
+      });
+      continue;
+    }
+
+    if (cur.value === "[") {
+      stream.next();
+      const propExpr = parseExpression(stream);
+      stream.expect("OP", "]");
+      obj = new ASTNode("MemberExpression", {
+        object: obj,
+        property: propExpr,
+        computed: true,
+      });
+      continue;
+    }
+
+    if (cur.value === "(") {
+      stream.next();
+      const args = [];
+      while (stream.current() && !(stream.current().type === "OP" && stream.current().value === ")")) {
+        args.push(parseExpression(stream));
+        if (stream.current() && stream.current().type === "OP" && stream.current().value === ",") {
+          stream.next();
+        } else {
+          break;
+        }
+      }
+      stream.expect("OP", ")");
+      obj = new ASTNode("CallExpression", { callee: obj, arguments: args });
+      continue;
+    }
+
+    break;
+  }
+
+  return obj;
+}
+
+function parsePrimary(stream) {
+  const token = stream.current();
+  if (!token) return new ASTNode("UnknownExpression", {});
+
+  // Literals
+  if (token.type === "NUMBER") {
+    stream.next();
+    return new ASTNode("Literal", { value: token.value });
+  }
+  if (token.type === "STRING") {
+    stream.next();
+    return new ASTNode("Literal", { value: JSON.stringify(token.value) });
+  }
+  if (token.type === "IDENTIFIER" && ["true", "false", "null"].includes(token.value)) {
+    stream.next();
+    if (token.value === "true") return new ASTNode("Literal", { value: "true" });
+    if (token.value === "false") return new ASTNode("Literal", { value: "false" });
+    return new ASTNode("Literal", { value: "null" });
+  }
+
+  // Array literal
+  if (token.type === "OP" && token.value === "[") {
+    stream.next();
+    const elements = [];
+    while (stream.current() && !(stream.current().type === "OP" && stream.current().value === "]")) {
+      elements.push(parseExpression(stream));
+      if (stream.current() && stream.current().type === "OP" && stream.current().value === ",") {
         stream.next();
-        while (stream.current() && stream.current().value !== "}") {
-          stream.next();
-        }
-        stream.expect("OP", "}");
+      } else {
+        break;
       }
     }
+    stream.expect("OP", "]");
+    return new ASTNode("ArrayExpression", { elements });
   }
-  return new ASTNode("IfStatement", {
-    loc: { line: start.line, col: start.col },
-  });
-}
 
-function parseJSFor(stream) {
-  // for (...) { ... }
-  const start = stream.expect("KEYWORD", "for");
-  stream.expect("OP", "(");
-  while (stream.current() && stream.current().value !== ")") {
+  // Object literal
+  if (token.type === "OP" && token.value === "{") {
     stream.next();
-  }
-  stream.expect("OP", ")");
-  stream.expect("OP", "{");
-  while (stream.current() && stream.current().value !== "}") {
-    stream.next();
-  }
-  stream.expect("OP", "}");
-  return new ASTNode("ForStatement", {
-    loc: { line: start.line, col: start.col },
-  });
-}
-
-function parseJSWhile(stream) {
-  // while (...) { ... }
-  const start = stream.expect("KEYWORD", "while");
-  stream.expect("OP", "(");
-  while (stream.current() && stream.current().value !== ")") {
-    stream.next();
-  }
-  stream.expect("OP", ")");
-  stream.expect("OP", "{");
-  while (stream.current() && stream.current().value !== "}") {
-    stream.next();
-  }
-  stream.expect("OP", "}");
-  return new ASTNode("WhileStatement", {
-    loc: { line: start.line, col: start.col },
-  });
-}
-
-function parseJSTry(stream) {
-  // try { ... } catch(e) { ... } finally { ... }
-  const start = stream.expect("KEYWORD", "try");
-  stream.expect("OP", "{");
-  while (stream.current() && stream.current().value !== "}") {
-    stream.next();
-  }
-  stream.expect("OP", "}");
-  if (
-    stream.current() &&
-    stream.current().type === "KEYWORD" &&
-    stream.current().value === "catch"
-  ) {
-    stream.next();
-    stream.expect("OP", "(");
-    while (stream.current() && stream.current().value !== ")") {
+    const properties = [];
+    while (stream.current() && !(stream.current().type === "OP" && stream.current().value === "}")) {
+      const keyToken = stream.current();
+      if (keyToken.type !== "IDENTIFIER" && keyToken.type !== "STRING") {
+        break;
+      }
       stream.next();
+      stream.expect("OP", ":");
+      const value = parseExpression(stream);
+      properties.push({
+        key: new ASTNode("Identifier", { name: keyToken.value }),
+        value,
+      });
+      if (stream.current() && stream.current().type === "OP" && stream.current().value === ",") {
+        stream.next();
+      } else {
+        break;
+      }
     }
+    stream.expect("OP", "}");
+    return new ASTNode("ObjectExpression", { properties });
+  }
+
+  // Parentheses
+  if (token.type === "OP" && token.value === "(") {
+    stream.next();
+    const expr = parseExpression(stream);
     stream.expect("OP", ")");
-    stream.expect("OP", "{");
-    while (stream.current() && stream.current().value !== "}") {
-      stream.next();
-    }
-    stream.expect("OP", "}");
-  }
-  if (
-    stream.current() &&
-    stream.current().type === "KEYWORD" &&
-    stream.current().value === "finally"
-  ) {
-    stream.next();
-    stream.expect("OP", "{");
-    while (stream.current() && stream.current().value !== "}") {
-      stream.next();
-    }
-    stream.expect("OP", "}");
-  }
-  return new ASTNode("TryStatement", {
-    loc: { line: start.line, col: start.col },
-  });
-}
-
-function parseJSReturn(stream) {
-  const start = stream.expect("KEYWORD", "return");
-  // упрощенно: нет выражения
-  return new ASTNode("ReturnStatement", {
-    loc: { line: start.line, col: start.col },
-  });
-}
-
-function parseJSExpression(stream) {
-  // Упрощённо: если это IDENTIFIER и следом =, то присваивание
-  const token = stream.current();
-  if (!token) return null;
-  if (
-    token.type === "IDENTIFIER" &&
-    stream.peek(1) &&
-    stream.peek(1).value === "="
-  ) {
-    const ident = token.value;
-    stream.next();
-    const eq = stream.next(); // '='
-    // в реальности тут parseJSExpression(...)
-    if (stream.current()) {
-      stream.next();
-    }
-    return new ASTNode("AssignmentExpression", { left: ident });
-  }
-  // console.log(...)?
-  if (
-    token.type === "IDENTIFIER" &&
-    token.value === "console" &&
-    stream.peek(1) &&
-    stream.peek(1).value === "."
-  ) {
-    // console.log
-    stream.next(); // пропустить console
-    stream.next(); // пропустить .
-    if (stream.current() && stream.current().value === "log") {
-      stream.next();
-      if (stream.current() && stream.current().value === "(") {
-        // пропустить до ')'
-        while (stream.current() && stream.current().value !== ")") {
-          stream.next();
-        }
-        if (stream.current()) {
-          stream.next(); // пропустить ')'
-        }
-      }
-      return new ASTNode("ConsoleLog", {});
-    }
+    return expr;
   }
 
-  // Либо просто возвращаем узел "Identifier" (для демонстрации)
   if (token.type === "IDENTIFIER") {
     stream.next();
     return new ASTNode("Identifier", { name: token.value });
   }
-  // И т.д.
+
   stream.next();
   return new ASTNode("UnknownExpression", {});
 }

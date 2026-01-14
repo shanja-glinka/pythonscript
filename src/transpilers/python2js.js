@@ -1,3 +1,16 @@
+function formatParams(args, context) {
+  return args
+    .map((arg) => {
+      if (arg.kind === "rest") return `...${arg.name}`;
+      if (arg.kind === "kwargs") return `/* kwargs ${arg.name} unsupported */`;
+      if (arg.default) {
+        return `${arg.name} = ${pythonASTtoJS(arg.default, context)}`;
+      }
+      return arg.name;
+    })
+    .join(", ");
+}
+
 export function pythonASTtoJS(ast, context = {}) {
   // return JSON.stringify(ast);
   if (!ast) return "";
@@ -60,10 +73,30 @@ export function pythonASTtoJS(ast, context = {}) {
     case "StringLiteral":
       return JSON.stringify(ast.value);
 
+    case "BooleanLiteral":
+      return ast.value ? "true" : "false";
+
+    case "NullLiteral":
+      return "null";
+
     case "PrintStatement":
       return `console.log(${ast.args
         .map((a) => pythonASTtoJS(a, context))
         .join(", ")});`;
+
+    case "UnaryOp":
+      if (ast.op === "not") {
+        return `(!${pythonASTtoJS(ast.operand, context)})`;
+      }
+      return `(${ast.op}${pythonASTtoJS(ast.operand, context)})`;
+
+    case "BooleanOp": {
+      const jsOp = ast.op === "and" ? "&&" : "||";
+      return `(${pythonASTtoJS(ast.left, context)} ${jsOp} ${pythonASTtoJS(
+        ast.right,
+        context
+      )})`;
+    }
 
     case "BinOp":
       if (ast.op === "**") {
@@ -82,6 +115,17 @@ export function pythonASTtoJS(ast, context = {}) {
           context
         )})`;
       }
+
+    case "CompareChain": {
+      const parts = [];
+      let leftStr = pythonASTtoJS(ast.left, context);
+      for (const comp of ast.comparisons) {
+        const rightStr = pythonASTtoJS(comp.right, context);
+        parts.push(`(${leftStr} ${comp.op} ${rightStr})`);
+        leftStr = rightStr;
+      }
+      return parts.join(" && ");
+    }
 
     case "MembershipTest":
       if (ast.op === "in") {
@@ -123,6 +167,11 @@ export function pythonASTtoJS(ast, context = {}) {
       let calleeJS = pythonASTtoJS(ast.callee, context);
       let argsJS = ast.args.map((a) => pythonASTtoJS(a, context)).join(", ");
 
+      // len(x) -> x.length
+      if (ast.callee.type === "Variable" && ast.callee.name === "len" && ast.args.length === 1) {
+        return `${pythonASTtoJS(ast.args[0], context)}.length`;
+      }
+
       // Преобразование методов append в push
       if (
         ast.callee.type === "AttributeAccess" &&
@@ -138,19 +187,42 @@ export function pythonASTtoJS(ast, context = {}) {
 
       return `${calleeJS}(${argsJS})`;
 
+    case "AugAssign": {
+      const op = ast.op.replace("=", "");
+      return `${pythonASTtoJS(ast.left, context)} ${op}= ${pythonASTtoJS(
+        ast.right,
+        context
+      )};`;
+    }
+
+    case "ConditionalExpression":
+      return `(${pythonASTtoJS(ast.test, context)} ? ${pythonASTtoJS(
+        ast.consequent,
+        context
+      )} : ${pythonASTtoJS(ast.alternate, context)})`;
+
+    case "SliceAccess": {
+      const obj = pythonASTtoJS(ast.object, context);
+      const start = ast.start ? pythonASTtoJS(ast.start, context) : "0";
+      const stop = ast.stop
+        ? pythonASTtoJS(ast.stop, context)
+        : `${obj}.length`;
+      return `${obj}.slice(${start}, ${stop})`;
+    }
+
     case "ClassDef":
       const className = ast.name;
       const classBody = ast.body
         .map((stmt) => {
           if (stmt.type === "FunctionDef") {
             if (stmt.name === "__init__") {
-              const params = stmt.args.join(", ");
+              const params = formatParams(stmt.args, { inMethod: true, inClass: true });
               const bodyJS = stmt.body
                 .map((s) => pythonASTtoJS(s, { inMethod: true, inClass: true }))
                 .join("\n    ");
               return `constructor(${params}) {\n    ${bodyJS}\n  }`;
             } else {
-              const params = stmt.args.join(", ");
+              const params = formatParams(stmt.args, { inMethod: true, inClass: true });
               const bodyJS = stmt.body
                 .map((s) => pythonASTtoJS(s, { inMethod: true, inClass: true }))
                 .join("\n    ");
@@ -169,14 +241,14 @@ export function pythonASTtoJS(ast, context = {}) {
           // __init__ уже обрабатывается в ClassDef
           return `/* __init__ handled in ClassDef */`;
         } else {
-          const params = ast.args.join(", ");
+          const params = formatParams(ast.args, { inMethod: true, inClass: true });
           const bodyJS = ast.body
             .map((s) => pythonASTtoJS(s, { inMethod: true, inClass: true }))
             .join("\n    ");
           return `${ast.name}(${params}) {\n    ${bodyJS}\n  }`;
         }
       } else {
-        const params = ast.args.join(", ");
+        const params = formatParams(ast.args, context);
         const funcBody = ast.body
           .map((s) => pythonASTtoJS(s, context))
           .join("\n  ");

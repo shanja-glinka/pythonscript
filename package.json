@@ -15,7 +15,7 @@
     "src"
   ],
   "scripts": {
-    "test": "node test/runner.test.js",
+    "test": "node --test \"test/**/*.test.js\"",
     "build": "echo 'No build step defined; see bin/pythonscript for usage.'"
   },
   "keywords": [

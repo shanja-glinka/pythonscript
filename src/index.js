@@ -9,17 +9,50 @@ import { executeJS as executeBrowser } from "./runtime/browser.js";
 import { executeJS as executeNode } from "./runtime/node.js";
 import { jsASTtoPython } from "./transpilers/js2python.js";
 import { pythonASTtoJS } from "./transpilers/python2js.js";
+import { stdlibHeader } from "./runtime/stdlib.js";
+
+function getExt(inputFile) {
+  return path.extname(inputFile).toLowerCase();
+}
+
+export async function tokenizeFile(inputFile) {
+  const code = await fs.readFile(inputFile, "utf8");
+  const ext = getExt(inputFile);
+
+  if (ext === ".pjs") {
+    return tokenizePython(code, inputFile);
+  }
+  if (ext === ".js") {
+    return tokenizeJavaScript(code, inputFile);
+  }
+
+  throw new Error(`Unsupported extension: ${ext}`);
+}
+
+export async function parseFile(inputFile) {
+  const ext = getExt(inputFile);
+  const tokens = await tokenizeFile(inputFile);
+
+  if (ext === ".pjs") {
+    return parsePythonTokens(tokens, inputFile);
+  }
+  if (ext === ".js") {
+    return parseJavaScriptTokens(tokens, inputFile);
+  }
+
+  throw new Error(`Unsupported extension: ${ext}`);
+}
 
 /**
  * Функция для транспиляции PythonScript
  * @param {string} inputFile - Путь к входному файлу
  * @param {string} outputFile - Путь к выходному файлу
  */
-export async function build(inputFile, outputFile) {
+export async function build(inputFile, outputFile, { target = "node" } = {}) {
   try {
     console.log(`Чтение файла: ${inputFile}`);
     const code = await fs.readFile(inputFile, "utf8");
-    const ext = path.extname(inputFile).toLowerCase();
+    const ext = getExt(inputFile);
 
     let outCode = "";
 
@@ -34,7 +67,7 @@ export async function build(inputFile, outputFile) {
       const ast = parseJavaScriptTokens(tokens, inputFile);
       outCode = jsASTtoPython(ast);
     } else {
-      throw new Error(`Неизвестное расширение: ${ext}`);
+      throw new Error(`Unsupported extension: ${ext}`);
     }
 
     // Вычисляем директорию для выходного файла
@@ -43,6 +76,10 @@ export async function build(inputFile, outputFile) {
 
     // Создаём директорию, если она не существует
     await fs.mkdir(outputDir, { recursive: true });
+
+    if (target) {
+      outCode = `/* pythonscript target: ${target} */\n${stdlibHeader()}${outCode}`;
+    }
 
     console.log(`Запись выходного файла: ${outputFile}`);
     // Записываем транспилированный код в выходной файл
@@ -54,11 +91,20 @@ export async function build(inputFile, outputFile) {
   }
 }
 
-export async function run(inputFile, { mode = "node" } = {}) {
+export async function run(
+  inputFile,
+  { mode = "node", unsafe = false, sandbox = false, timeoutMs = 1000 } = {}
+) {
   try {
+    if (!unsafe) {
+      throw new Error(
+        "Execution is disabled by default. Re-run with --unsafe (and optionally --sandbox)."
+      );
+    }
+
     console.log(`Чтение файла: ${inputFile}`);
     const code = await fs.readFile(inputFile, "utf8");
-    const ext = path.extname(inputFile).toLowerCase();
+    const ext = getExt(inputFile);
 
     let jsCode = "";
 
@@ -71,14 +117,14 @@ export async function run(inputFile, { mode = "node" } = {}) {
       console.log("Использование JavaScript напрямую");
       jsCode = code;
     } else {
-      throw new Error(`Неизвестное расширение: ${ext}`);
+      throw new Error(`Unsupported extension: ${ext}`);
     }
 
     console.log(`Выполнение кода в режиме: ${mode}`);
     if (mode === "browser") {
       await executeBrowser(jsCode);
     } else {
-      await executeNode(jsCode);
+      await executeNode(jsCode, { sandbox, timeoutMs });
     }
 
     console.log("Выполнение завершено успешно.");
